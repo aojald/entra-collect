@@ -44,7 +44,7 @@ All paths are relative to `output_YYYY-MM-DD_HHMM/`.
 | File | Description |
 |---|---|
 | `03_role_definitions.json` | Role catalog |
-| `03_PrivilegedRoles_Audit.csv` | All assignments (permanent + PIM eligible) |
+| `03_PrivilegedRoles_Audit.csv` | All directory role assignments (permanent + PIM eligible), including readers |
 | `03_PrivilegedAccounts_HighValue.csv` | High-value roles only |
 
 ## Apps & guests
@@ -121,7 +121,7 @@ All paths are relative to `output_YYYY-MM-DD_HHMM/`.
 
 | File | Description |
 |---|---|
-| `30_patch_tuesday_reference.json` | KB / build map used for lag calc |
+| `30_patch_tuesday_reference.json` | Live CU / Patch Tuesday map (Microsoft Learn; fallback if fetch fails) |
 | `30_RMM_*.csv` | RMM detections + family prevalence |
 | `30_RMM_Dismissed_Artefacts.csv` | Noise dismissed as collaboration viewers (not desktop agents) |
 | `31_AI_Agents_*.csv` | AI agent process/software signals |

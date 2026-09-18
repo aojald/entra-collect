@@ -120,7 +120,7 @@ Collection is **schema-aware** and **permission-aware**. Missing roles produce `
 
 | Area | Examples |
 |---|---|
-| Roles | Privileged role audit, high-value accounts, hygiene (GA / hybrid / MFA) |
+| Roles | High-value Entra roles **and** the full directory assignment inventory (Global Reader, Security Reader, …) |
 | Attack path | Consent policy, CA coverage matrix, exclusion groups, path-to-GA, high-priv owners |
 | Apps | Dangerous Graph permissions, wildcard reply URLs, secret expiry |
 

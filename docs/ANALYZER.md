@@ -24,7 +24,7 @@ node report.js output_YYYY-MM-DD_HHMM
 | `NARR.App.PathToGA` | High | `40_Apps_Path_To_GA` |
 | `NARR.App.TapAutomation` | High | Auth Admin SP / `logic-generateTAP*` |
 | `NARR.App.CaPolicyWrite` | High | `Policy.ReadWrite.ConditionalAccess` on apps |
-| `NARR.App.SpnActive` | High/Med | `04_SPN_DangerousPerms` ∩ `27_SPN_SignIns_*` — over-privileged apps that really authenticate |
+| `NARR.App.SpnActive` | High/Med | `04_SPN_DangerousPerms` ∩ `27_SPN_SignIns_*` / digest — join on AppId / SP id, not display name |
 | `NARR.App.SpnDormant` | Med/Low | Same join, inverted — dangerous grants with no sign-in (removal candidates) |
 | `NARR.App.ExpiredSecrets` | Med/Low | `04_App_SecretsExpiry` |
 | `NARR.Priv.DormantAdmin` | Critical/High | `08_Accounts_Inactive_*` ∩ privileged roles, minus accounts matching the break-glass pattern |
@@ -39,11 +39,11 @@ node report.js output_YYYY-MM-DD_HHMM
 | `NARR.CA.BreakGlassExclusions` | High | Same user excluded from ≥8 enforced CA (`02_CA_Audit`) |
 | `NARR.CA.SecInfoReg` | High | Register security info coverage |
 | `NARR.CA.ExclGroups` | High | Non–role-assignable exclusion groups |
-| `NARR.CA.ReportOnlyCompliance` | High | Device compliance report-only |
+| `NARR.CA.ReportOnlyCompliance` | High | Device compliance report-only (not MAM `compliantApplication`) |
 | `NARR.CA.ReportOnlyHardening` | High | Token Protection / phishing-resistant report-only |
 | `NARR.CA.TrustedIpHygiene` | High | Public DNS (e.g. `1.1.1.1`) in trusted named locations |
 | `NARR.CA.AzureMgmt` | Medium | Azure Management Partial |
-| `NARR.MFA.MassGap` | Low→High | `07_Users_Without_MFA` + license-gate CA context |
+| `NARR.MFA.MassGap` | Low→High | `07_Users_Without_MFA` + All-users / license-gate CA (role-only and risk MFA do not count as coverage) |
 | `NARR.Endpoint.RmmSuspicious` | High/Med | Desktop RMM *agents* after noise filter (`30_RMM_*`) |
 | `NARR.Endpoint.RmmInventoryNoise` | Info | Mobile/viewer/QuickSupport-only inventory |
 | `NARR.Endpoint.TvmCves` | High | Unpatched Critical/High CVEs — `11_*` + `32_TVM_Windows_*` |
@@ -55,7 +55,7 @@ node report.js output_YYYY-MM-DD_HHMM
 | `NARR.Mail.SetMailboxBurst` | Med/Low | `25_HighValue_CloudAppEvents_*` Set-Mailbox, broken down by day and by attributed account |
 | `NARR.Mail.ConsumerOutbound` | Med/Low | `18_Outbound_Email_Domains_30d` + `18_Consumer_Outbound_BySender_30d` — ranked by bytes and attachment count |
 | `NARR.Devices.MultiEndpoint` | Info/Med | `09_Devices_Per_User_Multi` — flags shared enrollment/admin identities with mass device ownership |
-| `NARR.Alert.HighSeverity` | High/Med | `36_Security_Alerts_30d` — High/Critical Defender XDR alerts |
+| `NARR.Alert.HighSeverity` | High/Med/Info | `36_Security_Alerts_30d` — High/Critical XDR; MDCA/IRM storms are not treated as endpoint compromise |
 | `NARR.Exposure.CriticalAssets` | Med/Info | `37_Exposure_Critical_Assets` — Exposure Manager critical/internet-facing nodes |
 | `NARR.Exposure.Paths` | Med | `37_Exposure_Critical_Paths` — edges touching critical nodes |
 | `NARR.Identity.DefenderCritical` | High/Med | `38_IdentityInfo_Critical` — UEBA inventory when Logon tables are empty |
@@ -126,7 +126,10 @@ in context. The analyzer detects these rather than reporting them as gaps:
   unlicensed or unmanaged sign-in, a large "users without MFA" count is
   inventory rather than exposure. `detectLicenseGatedAccess()` recognises the
   pair and `NARR.MFA.MassGap` states that the compensating control is already
-  deployed instead of recommending it.
+  deployed instead of recommending it. Role-only MFA, Identity Protection
+  risk MFA, and admin-portal MFA are not treated as population coverage;
+  group-scoped MFA is recorded as scoped, not covered.
 - **Rooms and shared mailboxes** — these will never register an MFA method. The
   correct control is blocking interactive sign-in, so they are counted and
-  advised separately from human accounts.
+  advised separately from human accounts. `admin.` / `adm.` prefixes are
+  bucketed as service accounts, not humans.

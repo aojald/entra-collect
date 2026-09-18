@@ -29,6 +29,7 @@ npm run collect:azure   # --portal azure
 | `--portal entra\|azure` | `entra` | Home portal + blade tour |
 | `--out DIR` | tool folder | Where `output_*` directories are created |
 | `--resume DIR` | off | Re-run into an existing output dir, retrying only failed steps |
+| `--intel-only` | off | With `--resume`: skip Graph inventory, re-run adaptive intel hunts (alerts / exposure / IdentityInfo / GraphAPI writes) |
 | `--check-permissions` | off | Print the scope-coverage matrix and exit without collecting |
 | `--tenant TENANT_ID` | — | Tenant id (required for `--auth app`; optional elsewhere) |
 | `--inactive-days N` | `90` | Enabled accounts with no sign-in since N days |
@@ -170,7 +171,7 @@ Skip with `--no-capanalyzer-offline`. Bound membership count with `--capanalyzer
 | Empty CA / 403 on policies | Token lacks Policy.Read | Complete Entra CA blade tour; use Global Reader |
 | Many `ERROR_hunt_*.json` with 403 | No ThreatHunting scope **and** portal XSRF died mid-run | Keep Edge on Advanced Hunting; collector now auto-refreshes XSRF (~4m) + retries. Check `Attempts:` in ERROR for `portal:` lines |
 | `Portal=ready` but hunts empty | Stale XSRF cached while Edge UI still open | Fixed in `lib/hunt.js` (invalidate + force reload); re-collect |
-| `DeviceInfo` / `AADSignInEventsBeta` missing | No MDE / identity hunting stream | Not Log Analytics by default — see [HUNTING_KQL.md](HUNTING_KQL.md) |
+| `DeviceInfo` / `EntraIdSignInEvents` / `AADSignInEventsBeta` missing | No MDE / identity hunting stream | Not Log Analytics by default — see [HUNTING_KQL.md](HUNTING_KQL.md) |
 | No device-code rows | Filter unsupported or no events | Check Graph sample / Entra Sign-in logs portal |
 | EXO forwarding n/a | No Exchange admin token | Open `admin.exchange.microsoft.com` during collection |
 | Intune rings empty | No Intune read | Grant Intune Reader and re-run |
@@ -204,6 +205,9 @@ rather than exceptional:
 node collect.js --auth browser --cdp http://127.0.0.1:9222
 # a few steps failed near the end
 node collect.js --auth browser --cdp http://127.0.0.1:9222 --resume output_YYYY-MM-DD_HHMM
+
+# Re-run only adaptive intel hunts (GraphAPI writes, alerts, IdentityInfo, …)
+node collect.js --auth browser --cdp http://127.0.0.1:9222 --resume output_YYYY-MM-DD_HHMM --intel-only
 ```
 
 ### Checks that are skipped rather than failed

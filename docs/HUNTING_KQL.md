@@ -11,7 +11,8 @@ The collector **auto-discovers** schema on each run (`lib/schema.js` → `19_Hun
 
 | Query table | Error | Meaning |
 |---|---|---|
-| `AADSignInEventsBeta` | table not resolved | Identity data is not in Defender Advanced Hunting for this tenant |
+| `AADSignInEventsBeta` | table not resolved | Legacy XDR identity table — current tenants often have `EntraIdSignInEvents` instead |
+| `EntraIdSignInEvents` | table not resolved | Entra identity stream not in Defender Hunting (needs Entra ID P2 + XDR identity) |
 | `DeviceInfo` | table not resolved | No MDE Advanced Hunting device tables (or wrong workspace) |
 
 Those tables are **not** default Log Analytics. They only appear in Defender XDR Advanced Hunting when the product streams data.
@@ -22,7 +23,7 @@ Those tables are **not** default Log Analytics. They only appear in Defender XDR
 
 1. **Entra** → Monitoring → Sign-in logs (Graph `auditLogs/signIns`) — default, no LAW required  
 2. **Log Analytics / Sentinel** — only if Entra Diagnostic settings → workspace (`SigninLogs`, `AuditLogs`)  
-3. **Defender Hunting** — `DeviceInfo` / `AADSignInEventsBeta` only with MDE / XDR streams  
+3. **Defender Hunting** — `DeviceInfo` plus `EntraIdSignInEvents` (legacy `AADSignInEventsBeta`) with MDE / XDR streams  
 
 ---
 
@@ -36,7 +37,7 @@ search *
 | sort by $table asc
 ```
 
-Probes: `DeviceInfo | take 1`, `AADSignInEventsBeta | take 1`, `EmailEvents | take 1`, `SigninLogs | take 1`, …
+Probes: `DeviceInfo | take 1`, `EntraIdSignInEvents | take 1`, `AADSignInEventsBeta | take 1`, `EmailEvents | take 1`, `SigninLogs | take 1`, … The collector prefers the table that exists and has rows (new XDR name, then legacy XDR, then Sentinel, then Defender for Identity).
 
 ---
 
@@ -54,3 +55,11 @@ SigninLogs
 ```
 
 Device/RMM/patch KQL only if `DeviceInfo` exists — or just re-run the collector once hunting is enabled; it adapts automatically.
+
+### GraphAPIAuditEvents (CA / role / consent writes)
+
+This table has **no** `AccountDisplayName`. Group by `AccountObjectId` (plus `ApplicationId` / `ServicePrincipalId`). The collector does that automatically (`39_GraphAPI_Write_Audit_30d.csv`). To refresh only this family of hunts:
+
+```bash
+node collect.js --auth browser --cdp http://127.0.0.1:9222 --resume output_YYYY-MM-DD_HHMM --intel-only
+```
