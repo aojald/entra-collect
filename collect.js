@@ -72,6 +72,7 @@ Common:
   --tenant TENANT_ID    pin collection to this tenant GUID (abort if tokens/org differ)
   --out DIR             output root (default: this folder)
   --resume DIR          retry failed steps in an existing output_* folder
+  --intel-only          with --resume: re-run alerts/exposure/identity/GraphAPI hunts only
   --check-permissions   show scopes present vs required, then exit
   --inactive-days N     default 90
   --device-stale-months N  default 3
@@ -136,6 +137,7 @@ const clientSecret = argValue("--client-secret", "") || process.env.ENTRA_CLIENT
 const clientCert = argValue("--client-cert", "") || null;
 const clientCertKey = argValue("--client-cert-key", "") || null;
 const checkPermissionsOnly = args.includes("--check-permissions");
+const intelOnly = args.includes("--intel-only");
 const resumeDir = argValue("--resume", "") || null;
 const outRoot = argValue("--out", "") || __dirname;
 /** auto = CLI first then browser if needed; cli = CLI only; browser = Playwright only; device = az device-code; app = client credentials */
@@ -974,12 +976,16 @@ async function main() {
     console.error(`--resume: ${outDir} does not exist`);
     process.exit(1);
   }
+  if (intelOnly && !resumeDir) {
+    console.error("--intel-only requires --resume DIR (existing output folder)");
+    process.exit(1);
+  }
   console.log("Entra Collect — attack-path assessment");
   console.log(`Output: ${outDir}`);
   console.log(`Platform: ${process.platform} | auth: ${authMode}`);
   console.log(`Start URL (browser fallback): ${HOME_URL}`);
   console.log(
-    `Flags: inactiveDays=${inactiveDays} deviceStaleMonths=${deviceStaleMonths} signInDays=${signInDays.join(",")} rmmLegitThreshold=${rmmLegitThreshold}`
+    `Flags: inactiveDays=${inactiveDays} deviceStaleMonths=${deviceStaleMonths} signInDays=${signInDays.join(",")} rmmLegitThreshold=${rmmLegitThreshold}${intelOnly ? " intelOnly=true" : ""}`
   );
   if (authMode !== "cli" && authMode !== "app") {
     console.log(
@@ -1203,6 +1209,7 @@ async function main() {
     capAnalyzerSignInPages,
     portalPage,
     resume: !!resumeDir,
+    intelOnly,
   });
 
   if (browser) await browser.close();

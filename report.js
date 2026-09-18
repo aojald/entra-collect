@@ -19,6 +19,10 @@ const {
   stripHtml,
 } = require("./lib/securescore");
 const { writeFileNode: writeXlsxReport } = require("./lib/xlsxReport");
+const {
+  enrichDirectoryRoleRows,
+  rollupDirectoryRoles,
+} = require("./lib/posture");
 
 function readJson(p) {
   try {
@@ -496,7 +500,7 @@ function buildCoverage(summary, schema, errors) {
       Status: summary.huntingCanHunt ? "Available" : summary.huntingApiStatus || "Unavailable",
       Impact: summary.huntingCanHunt
         ? "Endpoint / identity / email hunts possible"
-        : "RMM, AI, patch, TVM, EmailEvents, AADSignInEventsBeta skipped",
+        : "RMM, AI, patch, TVM, EmailEvents, EntraIdSignInEvents skipped",
     },
     {
       Domain: "RMM / process hunts",
@@ -683,6 +687,21 @@ function buildReportPayload(outDir) {
   const caCoverage = readCsv(path.join(outDir, "40_CA_AttackPath_Coverage.csv"));
   const caAudit = readCsv(path.join(outDir, "02_CA_Audit.csv"));
   const priv = readCsv(path.join(outDir, "03_PrivilegedAccounts_HighValue.csv"));
+  const privAllRaw = readCsvMaybe(outDir, "03_PrivilegedRoles_Audit.csv");
+  const roleDefJson = readJson(path.join(outDir, "03_role_definitions.json"));
+  const roleDefById = {};
+  for (const d of Array.isArray(roleDefJson) ? roleDefJson : []) {
+    if (d && d.id && d.displayName) roleDefById[d.id] = d.displayName;
+    if (d && d.templateId && d.displayName) roleDefById[d.templateId] = d.displayName;
+  }
+  const highValueNames = new Set(
+    (priv || []).map((r) => r.RoleName).filter(Boolean)
+  );
+  const privAll = enrichDirectoryRoleRows(privAllRaw.length ? privAllRaw : priv, {
+    roleDefById,
+    highValueNames,
+  });
+  const privByRole = rollupDirectoryRoles(privAll);
   const dangerous = readCsv(path.join(outDir, "04_SPN_DangerousPerms.csv"));
   const gaPath = readCsv(path.join(outDir, "40_Apps_Path_To_GA.csv"));
   const deviceCode = readCsvMaybe(outDir, "20_DeviceCode_Users_90d.csv").length
@@ -909,6 +928,10 @@ function buildReportPayload(outDir) {
     caCoverage,
     caAudit: caAudit.slice(0, 300),
     priv: priv.slice(0, CAP),
+    privTotal: priv.length,
+    privAll: privAll.slice(0, CAP),
+    privAllTotal: privAll.length,
+    privByRole,
     dangerous: dangerous.slice(0, CAP),
     gaPath: gaPath.slice(0, CAP),
     spnActivity,
@@ -1631,7 +1654,7 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
       devices: ["Devices", "Stale joined, registered-only, and per-user PC / phone / tablet inventory."],
       endpoints: ["Endpoints", "RMM, GenAI volume, file-sharing, TVM CVEs, patch lag — when Hunting is available."],
       collab: ["Mail & collaboration", "Anti-spam checklist, email hunting samples, outbound domains, Teams guest settings, log retention notes."],
-      privileged: ["Privileged access", "Roles and hybrid / MFA hygiene."],
+      privileged: ["Privileged access", "High-value roles plus the full directory assignment inventory (readers included)."],
       apps: ["Applications", "Dangerous Graph permissions, path-to-GA, owners, secrets, wildcards."],
       score: ["Secure Score", "In-scope Microsoft Secure Score by category (Identity / Apps / Data) — not the full product catalog."],
       schema: ["Hunting schema", "Tables and capabilities probed this run."]
@@ -2337,9 +2360,46 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
       }) + '</div>'
     : '';
 
+  const privAllRows = D.privAll || [];
+  const privByRole = D.privByRole || [];
+  const privAllTotal = D.privAllTotal ?? privAllRows.length;
+  const highValueTotal = D.privTotal ?? (D.priv || []).length;
+  const uniqueRoles = privByRole.length;
+  const readerAssign = privAllRows.filter((r) => r.Tier === "Reader").length;
+  const dataPlaneAssign = privAllRows.filter((r) => r.Tier === "Data-plane").length;
+  const roleTierCards =
+    '<div class="grid grid-4" style="margin-bottom:1rem">' +
+      toneCard("High-value assignments", highValueTotal, "GA / app / CA / mailbox admins", highValueTotal ? "warn" : "success") +
+      toneCard("All directory assignments", countLabel(privAllTotal, "03_PrivilegedRoles_Audit.csv"), uniqueRoles + " distinct role(s)", "info") +
+      toneCard("Reader assignments", readerAssign, "Global / Security / Directory Readers", "info") +
+      toneCard("Data-plane", dataPlaneAssign, "Purview content purge (not Entra isPrivileged)", dataPlaneAssign ? "warn" : "info") +
+    "</div>" +
+    '<div class="callout info"><strong>High-value is identity control-plane</strong> (Global Admin, app/CA/Exchange/SharePoint/Intune admins, …). ' +
+    "The full list below is every Entra directory role assignment collected, including Global Reader and Security Reader. " +
+    "<strong>Purview Workload Content Administrator</strong> is not an Entra privileged role (directory permissions = Directory Readers) — it is synced from Purview Search and Purge / data-security investigation and can <em>purge M365 content</em>. Treat it as data-plane sensitive, not as GA-class.</div>";
+
   document.getElementById("sec-privileged").innerHTML =
     dormantCard +
-    dataCard("High-value roles", null, ["RoleName","PrincipalName","PrincipalType","UPNOrAppId","AssignmentType","PIMEnabled"], D.priv||[]) +
+    roleTierCards +
+    dataCard("High-value roles", highValueTotal, ["RoleName","PrincipalName","PrincipalType","UPNOrAppId","AssignmentType","PIMEnabled"], D.priv||[]) +
+    dataCard("All directory role assignments", privAllTotal, ["Tier","RoleName","PrincipalName","PrincipalType","UPNOrAppId","AssignmentType","PIMEnabled"], privAllRows, (r,h)=>{
+      if (h==="Tier") {
+        if (r[h]==="High-value") return badge("Fail") + ' <span class="muted" style="font-size:11px">high-value</span>';
+        if (r[h]==="Data-plane") return badge("Partial") + ' <span class="muted" style="font-size:11px">data-plane</span>';
+        if (r[h]==="Reader") return badge("Info") + ' <span class="muted" style="font-size:11px">reader</span>';
+        return badge("Pass") + ' <span class="muted" style="font-size:11px">other</span>';
+      }
+      return esc(r[h]);
+    }) +
+    dataCard("Assignments by role", uniqueRoles, ["RoleName","Tier","Assignments","Permanent","Eligible","Users","ServicePrincipals"], privByRole, (r,h)=>{
+      if (h==="Tier") {
+        if (r[h]==="High-value") return badge("Fail");
+        if (r[h]==="Data-plane") return badge("Partial");
+        if (r[h]==="Reader") return badge("Info");
+        return badge("Pass");
+      }
+      return esc(r[h]);
+    }) +
     '<div class="card" style="margin-bottom:1rem"><h2>Hygiene</h2>' +
     '<p class="muted" style="font-size:12px;margin:.25rem 0 .75rem">Badges: <strong>GA / Hybrid = true → Fail</strong> (risky). MFA blank = Unknown. Check <strong>Enabled</strong> — disabled accounts are inventory only.</p>' +
     table(["DisplayName","UPN","Roles","IsGlobalAdmin","OnPremSynced","MfaRegistered","AccountEnabled","HasMailboxHint"], D.privHygiene||[], (r,h)=>{

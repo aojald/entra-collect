@@ -121,7 +121,7 @@ See [OUTPUTS.md](OUTPUTS.md). Highlights: `00_` summary/report, `02_` CA, `03_` 
 |---|---|---|
 | RMM / AI agents / patch lag / TVM CVEs | `DeviceInfo` / process / TVM tables | `endpoints.js` — skipped cleanly if missing |
 | GenAI / file-share | `CloudAppEvents` **or** `DeviceNetworkEvents` | `endpoints.js` |
-| Failed logons / admin tooling (partial) | `AADSignInEventsBeta` / `SigninLogs` / `IdentityLogonEvents` | `logs.js` + `schema.js` KQL dialects |
+| Failed logons / admin tooling (partial) | `EntraIdSignInEvents` / `AADSignInEventsBeta` / `SigninLogs` / `IdentityLogonEvents` | `logs.js` + `schema.js` KQL dialects |
 | Defender alerts, exposure-critical assets, privileged IdentityLogon activity | `AlertInfo`, `ExposureGraph*`, `IdentityLogonEvents` | `lib/intel.js` — **runs with or without MDE** |
 
 On an MDE-light tenant (Identity + CloudApp + Alerts + Exposure Graph, no Device* tables), endpoint CSVs stay empty by design and adaptive intel (`36_`–`39_`) carries the hunting signal — including IdentityInfo/AccountInfo inventory and Exposure Graph paths when event tables are empty. Graph digests (`21_LegacyAuth_ByAccount`, `24_RiskDetections`, `27_SPN_SignIns_Digest`, `28_Privileged_SignIns`) fill the same gap from auditLogs. On a full MDE tenant both paths run.
