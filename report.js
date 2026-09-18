@@ -684,6 +684,12 @@ function buildReportPayload(outDir) {
   const checklistPasses = (attackChecklist || []).filter((r) =>
     /pass/i.test(r.Status || "")
   );
+  const checklistNotEvaluated = (attackChecklist || []).filter((r) =>
+    /^(skip|notevaluated)$/i.test(String(r.Status || "").trim())
+  );
+  const checklistNotApplicable = (attackChecklist || []).filter((r) =>
+    /^notapplicable$/i.test(String(r.Status || "").trim())
+  );
   const caCoverage = readCsv(path.join(outDir, "40_CA_AttackPath_Coverage.csv"));
   const caAudit = readCsv(path.join(outDir, "02_CA_Audit.csv"));
   const priv = readCsv(path.join(outDir, "03_PrivilegedAccounts_HighValue.csv"));
@@ -923,6 +929,8 @@ function buildReportPayload(outDir) {
       fail: checklistFails.length,
       partial: checklistPartials.length,
       pass: checklistPasses.length,
+      notEvaluated: checklistNotEvaluated.length,
+      notApplicable: checklistNotApplicable.length,
       total: (attackChecklist || []).length,
     },
     caCoverage,
@@ -1429,6 +1437,7 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
     const map = {
       high:"danger", critical:"danger", medium:"warn", low:"info", info:"info",
       pass:"muted", fail:"danger", partial:"warn", unknown:"warn",
+      notevaluated:"warn", notapplicable:"muted", "n/a":"muted",
       now:"danger", next:"warn", later:"muted",
       enabled:"warn", disabled:"success",
       available:"success", runnable:"success", skipped:"warn", unavailable:"danger",
@@ -1442,8 +1451,9 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
     const t = String(s || "").toLowerCase();
     if (t === "fail") return 0;
     if (t === "partial") return 1;
-    if (t === "skip" || t === "unknown") return 2;
+    if (t === "skip" || t === "notevaluated" || t === "unknown") return 2;
     if (t === "pass") return 3;
+    if (t === "notapplicable") return 5;
     return 4;
   }
   /** Deep-dive section holding the tables behind each narrative family. */
@@ -2069,8 +2079,9 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
     (D.staleDevicesTotal || 0) + " stale";
 
   const apSorted = [...(D.attackChecklist || [])].sort((a, b) => statusRank(a.Status) - statusRank(b.Status));
-  const apGaps = apSorted.filter(r => !/pass/i.test(r.Status || ""));
+  const apNa = apSorted.filter(r => /^notapplicable$/i.test(String(r.Status || "").trim()));
   const apPass = apSorted.filter(r => /pass/i.test(r.Status || ""));
+  const apGaps = apSorted.filter(r => !/pass/i.test(r.Status || "") && !/^notapplicable$/i.test(String(r.Status || "").trim()));
 
   function checklistTable(rows, showSev) {
     return table(
@@ -2101,13 +2112,19 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
     '<details class="pass-fold"><summary>Show ' + apPass.length + ' passed controls (OK — not prioritized)</summary>' +
       checklistTable(apPass, false) +
     '</details>' +
+    (apNa.length
+      ? '<details class="pass-fold"><summary>Show ' + apNa.length + ' not-applicable controls (licence / Security Defaults — not gaps)</summary>' +
+          checklistTable(apNa, false) +
+        '</details>'
+      : '') +
     '<div class="card" style="margin-top:1rem"><h2>CA vs attacker paths</h2>' +
     table(["Control","Covered","Severity","Policies","Why"], D.caCoverage||[], (r,h)=>{
       const raw = String(r.Covered).toLowerCase();
+      const na = raw === "n/a";
       const unknown = raw === "unknown" || raw === "";
       const ok = raw === "true" || r.Covered === true;
-      if (h==="Covered") return unknown ? badge("Unknown") : ok ? badge("Pass") : badge("Fail");
-      if (h==="Severity") return ok || unknown ? '<span class="muted">—</span>' : badge(r[h]);
+      if (h==="Covered") return na ? badge("NotApplicable") : unknown ? badge("Unknown") : ok ? badge("Pass") : badge("Fail");
+      if (h==="Severity") return ok || unknown || na ? '<span class="muted">—</span>' : badge(r[h]);
       return esc(r[h]);
     }) + '</div>';
 
