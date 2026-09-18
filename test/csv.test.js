@@ -70,6 +70,20 @@ test("round-trips values that would break a naive parser", () => {
   assert.deepStrictEqual(parseCsv(toCsv(rows)), rows);
 });
 
+test("formula-looking cells are neutralised, numbers are not", () => {
+  assert.strictEqual(escapeCsv('=HYPERLINK("http://x")'), `"'=HYPERLINK(""http://x"")"`);
+  assert.strictEqual(escapeCsv("+cmd|' /C calc'!A0"), `'+cmd|' /C calc'!A0`);
+  assert.strictEqual(escapeCsv("@SUM(1)"), "'@SUM(1)");
+  assert.strictEqual(escapeCsv("-12"), "-12");
+  assert.strictEqual(escapeCsv(-12), "-12");
+  assert.strictEqual(escapeCsv("+3.5"), "+3.5");
+  assert.strictEqual(escapeCsv("-jane.doe@contoso.com"), "'-jane.doe@contoso.com");
+  const rows = [{ Name: "=1+1", DaysLeft: -3 }];
+  const back = parseCsv(toCsv(rows));
+  assert.strictEqual(back[0].Name, "'=1+1");
+  assert.strictEqual(Number(back[0].DaysLeft), -3);
+});
+
 test("toCsv uses the union of keys across rows", () => {
   const csv = toCsv([{ A: 1 }, { B: 2 }]);
   assert.strictEqual(csv.split("\n")[0], "A;B");

@@ -1088,9 +1088,8 @@ function renderHtml(data) {
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>${escapeHtml(data.meta.brand)} — Security Findings</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap" rel="stylesheet" />
+<!-- No external resources: the report carries tenant data and is opened on
+     customer / air-gapped machines, so it must not call out (fonts included). -->
 ${inlineJsPdf()}
 ${inlineXlsxExport()}
 <script>
@@ -1105,8 +1104,8 @@ ${inlineXlsxExport()}
 </script>
 <style>
 :root, [data-theme="light"] {
-  --font-display: "Sora", system-ui, sans-serif;
-  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-display: "Sora", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
   --ink: #f1f4f9; --ink-2: #ffffff; --surface: #ffffff; --surface-2: #e8eef6;
   --border: #d5dee9; --muted: #5a6b82; --text: #0f1b2d;
   --accent: #0f766e; --accent-dim: #0d9488; --accent-soft: rgba(15,118,110,.1);
@@ -3286,7 +3285,7 @@ from an existing collection folder (does not re-collect).
 
 Usage:
   node report.js [outputDir]
-  node report.js                 # latest non-empty output_* under this folder
+  node report.js                 # latest non-empty output_* in the current directory
   node report.js --help
 
 Examples:
@@ -3302,8 +3301,14 @@ Open the HTML, then use Download PDF / Download Excel in the page.
 `);
     process.exit(0);
   }
-  const base = path.resolve(__dirname);
-  const outDir = argvOut ? path.resolve(argvOut) : latestOutputDir(base);
+  // Collections default to the working directory; the tool folder is only a
+  // fallback for older layouts.
+  const outDir = argvOut
+    ? path.resolve(argvOut)
+    : latestOutputDir(process.cwd()) ||
+      (path.resolve(process.cwd()) !== path.resolve(__dirname)
+        ? latestOutputDir(path.resolve(__dirname))
+        : null);
   if (!outDir || !fs.existsSync(outDir)) {
     console.error(
       "No output directory found.\n" +

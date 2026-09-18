@@ -100,3 +100,35 @@ test("lockTenant refuses to switch tenants", () => {
   pool.lockTenant("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "first");
   assert.throws(() => pool.lockTenant("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "second"));
 });
+
+test("audiences are matched on the exact host, not a substring", () => {
+  const { isGraphAud, isMtpAud } = require("../lib/tokens");
+  assert.equal(isGraphAud("https://graph.microsoft.com"), true);
+  assert.equal(isGraphAud("https://graph.microsoft.com/"), true);
+  assert.equal(isGraphAud("00000003-0000-0000-c000-000000000000"), true);
+  assert.equal(isGraphAud("https://graph.microsoft.com.evil.example"), false);
+  assert.equal(isGraphAud("https://evil.example/?x=graph.microsoft.com"), false);
+  assert.equal(isMtpAud("https://api-eu.security.microsoft.com"), true);
+  assert.equal(isMtpAud("https://api.security.microsoft.com.attacker.tld"), false);
+
+  const pool = new TokenPool();
+  assert.equal(pool.add(graphToken({ aud: "https://graph.microsoft.com.evil.example" })), null);
+  assert.ok(pool.add(graphToken()));
+});
+
+test("portal hunting refuses headers from another tenant once locked", () => {
+  const { portalSession, mtpBaseFromAud } = require("../lib/hunt");
+  portalSession.lockTenant("11111111-1111-1111-1111-111111111111");
+  assert.equal(
+    portalSession._tidMatches({ "x-tid": "11111111-1111-1111-1111-111111111111" }),
+    true
+  );
+  assert.equal(
+    portalSession._tidMatches({ "x-tid": "22222222-2222-2222-2222-222222222222" }),
+    false
+  );
+  assert.equal(portalSession._tidMatches({}), true, "no tid: cannot judge");
+  assert.equal(mtpBaseFromAud("https://api.security.microsoft.com"), "https://api.security.microsoft.com");
+  assert.equal(mtpBaseFromAud("https://api.security.microsoft.com.evil.tld"), null);
+  portalSession.expectedTid = null;
+});

@@ -63,14 +63,17 @@ Auth:
                         app     = client credentials (see below)
 
 App-only (no interactive session — CI / scheduled):
-  --client-id UUID --client-secret SECRET --tenant TENANT_ID
+  --client-id UUID --tenant TENANT_ID  + ENTRA_CLIENT_SECRET env or --client-secret-file FILE
   --client-id UUID --client-cert path.pem --client-cert-key key.pem --tenant TENANT_ID
                         implies --auth app
+  --client-secret SECRET  deprecated (visible in ps / shell history) — prefer the env var or file
 
 Common:
   --portal entra|azure
   --tenant TENANT_ID    pin collection to this tenant GUID (abort if tokens/org differ)
-  --out DIR             output root (default: this folder)
+  --yes                 skip the interactive tenant confirmation when --tenant is not given
+  --out DIR             output root (default: current directory)
+  --no-cache            do not keep raw Graph responses in output_*/.cache (disables --resume)
   --resume DIR          retry failed steps in an existing output_* folder
   --intel-only          with --resume: re-run alerts/exposure/identity/GraphAPI hunts only
   --check-permissions   show scopes present vs required, then exit
@@ -92,6 +95,8 @@ Common:
                         default auto (Edge preferred on Windows, Edge/Brave on macOS)
   --cdp http://127.0.0.1:9222
                         attach to browser started by login-browser.sh / login-edge.cmd
+  --cdp-port N          debugging port when this tool launches the browser (default 9222)
+  --keep-browser        leave the launched browser (and its debugging port) open at the end
   --no-passkeys         disable WebAuthn (password / push MFA only)
 
 After collect (also runs automatically at the end of a successful collect):
@@ -132,14 +137,47 @@ const browserChannel = resolveBrowserChannel(
 const allowPasskeys = !args.includes("--no-passkeys");
 const tenantId = argValue("--tenant", "") || null;
 const cdpEndpoint = argValue("--cdp", "") || null;
+const cdpPort = Number(argValue("--cdp-port", "9222")) || 9222;
+const keepBrowser = args.includes("--keep-browser");
+const assumeYes = args.includes("--yes") || args.includes("-y");
+const noCache = args.includes("--no-cache");
 const clientId = argValue("--client-id", "") || null;
-const clientSecret = argValue("--client-secret", "") || process.env.ENTRA_CLIENT_SECRET || null;
+const clientSecret = resolveClientSecret();
 const clientCert = argValue("--client-cert", "") || null;
 const clientCertKey = argValue("--client-cert-key", "") || null;
 const checkPermissionsOnly = args.includes("--check-permissions");
 const intelOnly = args.includes("--intel-only");
 const resumeDir = argValue("--resume", "") || null;
-const outRoot = argValue("--out", "") || __dirname;
+/**
+ * Default to the caller's working directory, not the tool folder: an `npm -g`
+ * install would otherwise write tenant data next to global node_modules.
+ */
+const outRoot = argValue("--out", "") || process.cwd();
+
+/**
+ * Secret precedence: --client-secret-file, ENTRA_CLIENT_SECRET, then the
+ * deprecated --client-secret flag (visible in `ps` and shell history).
+ */
+function resolveClientSecret() {
+  const file = argValue("--client-secret-file", "");
+  if (file) {
+    try {
+      return fs.readFileSync(file, "utf8").trim() || null;
+    } catch (e) {
+      console.error(`--client-secret-file: ${e.message}`);
+      process.exit(1);
+    }
+  }
+  if (process.env.ENTRA_CLIENT_SECRET) return process.env.ENTRA_CLIENT_SECRET;
+  const inline = argValue("--client-secret", "");
+  if (inline) {
+    console.warn(
+      "⚠ --client-secret is deprecated: the value is visible in the process list and shell history. Use ENTRA_CLIENT_SECRET or --client-secret-file."
+    );
+    return inline;
+  }
+  return null;
+}
 /** auto = CLI first then browser if needed; cli = CLI only; browser = Playwright only; device = az device-code; app = client credentials */
 const authMode = String(
   argValue("--auth", clientId ? "app" : "auto")
@@ -228,6 +266,20 @@ const CA_URLS =
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Yes/no question on the terminal; anything but y/yes is "no". */
+function confirm(question) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(/^y(es)?$/i.test(String(answer || "").trim()));
+    });
+  });
 }
 
 function isLoginHost(url) {
@@ -703,9 +755,11 @@ function passkeyLaunchArgs() {
   }
   // Disable iCloud Keychain defaults (they surface macOS ASAuthorization USB/Touch ID UI).
   // Enable hybrid caBLE so the browser shows the QR you scan in Authenticator.
+  // No --remote-allow-origins: Playwright's CDP client sends no Origin header,
+  // and the flag would let any web page reach the debugging socket of the
+  // admin session for the whole run.
   return [
     "--disable-blink-features=AutomationControlled",
-    "--remote-allow-origins=*",
     "--disable-features=WebAuthenticationICloudKeychainForGoogle,WebAuthenticationICloudKeychainForActiveWithDrive,WebAuthenticationICloudKeychainForActiveWithoutDrive,WebAuthenticationICloudKeychainForInactiveWithDrive,WebAuthenticationICloudKeychainForInactiveWithoutDrive",
     "--enable-features=WebAuthenticationHybridTransports,WebAuthnHybridLinking,WebAuthnSecurityKeyAndQrCodeUiRefresh",
   ];
@@ -743,7 +797,7 @@ async function waitForCdp(endpoint, timeoutMs = 90000) {
  * Direct Playwright executablePath / binary launch → FIDO: Cannot use Bluetooth.
  * Must use NON-default user-data-dir or CDP port is silently ignored (Chrome/Edge 136+).
  */
-async function launchMacAppViaOpenAndConnect(name, port = 9222) {
+async function launchMacAppViaOpenAndConnect(name, port = cdpPort) {
   const { spawn } = require("child_process");
   const appName = resolveMacAppName(name);
   const userDataDir = resolveUserDataDir(`${name}-cdp`);
@@ -757,11 +811,10 @@ async function launchMacAppViaOpenAndConnect(name, port = 9222) {
     appName,
     "--args",
     `--remote-debugging-port=${port}`,
-    "--remote-allow-origins=*",
     `--user-data-dir=${userDataDir}`,
     "--no-first-run",
     "--no-default-browser-check",
-    ...passkeyLaunchArgs().filter((a) => !a.startsWith("--remote-allow-origins")),
+    ...passkeyLaunchArgs(),
     HOME_URL,
   ];
   console.log(`▶ Opening ${appName} via macOS open -a (Bluetooth / QR + CDP)…`);
@@ -782,6 +835,7 @@ async function acquireBrowserTokens(pool) {
   let context;
   let page;
   let ownsBrowser = true;
+  let launchedViaOpen = false;
 
   if (cdpEndpoint) {
     console.log(`▶ Attaching to existing browser via CDP: ${cdpEndpoint}\n`);
@@ -803,8 +857,11 @@ async function acquireBrowserTokens(pool) {
     ["brave", "msedge", "chrome"].includes(browserChannel)
   ) {
     // Never launch Edge/Brave binary directly on macOS — breaks Bluetooth → no QR.
-    browser = await launchMacAppViaOpenAndConnect(browserChannel, 9222);
-    ownsBrowser = false; // leave app running; CDP disconnect only
+    browser = await launchMacAppViaOpenAndConnect(browserChannel, cdpPort);
+    // We started it, so we close it at the end (the debugging port stays open
+    // otherwise) unless the operator asked to keep the window.
+    ownsBrowser = !keepBrowser;
+    launchedViaOpen = true;
     context =
       browser.contexts()[0] ||
       (await browser.newContext({
@@ -919,6 +976,31 @@ async function acquireBrowserTokens(pool) {
         if (!ownsBrowser) {
           try {
             // Disconnect CDP only — do not quit Edge/Brave (user may still need it)
+            await browser.close();
+          } catch {
+            /* ignore */
+          }
+          if (cdpEndpoint || launchedViaOpen) {
+            console.log(
+              "  ⚠ The browser keeps its debugging port open — close that window when the engagement step is done."
+            );
+          }
+          return;
+        }
+        if (launchedViaOpen) {
+          // `open -a` launched a real app: closing the CDP connection does not
+          // quit it, so ask the browser to shut down through CDP first.
+          try {
+            const ctx = browser.contexts()[0];
+            const anyPage = ctx && ctx.pages()[0];
+            if (anyPage) {
+              const session = await ctx.newCDPSession(anyPage);
+              await session.send("Browser.close").catch(() => {});
+            }
+          } catch {
+            /* ignore */
+          }
+          try {
             await browser.close();
           } catch {
             /* ignore */
@@ -1184,6 +1266,32 @@ async function main() {
   const tenantGuard = await assertTenantGuard(pool, { expectedTid: tenantId });
   authMeta.tenantGuard = tenantGuard;
 
+  // Without --tenant the lock came from whichever token arrived first. On a
+  // partner / multi-tenant browser session that can be the home tenant rather
+  // than the customer, so make the operator read the name before anything is
+  // written.
+  if (!tenantId && !checkPermissionsOnly) {
+    const label = `${tenantGuard.displayName || "(no display name)"} — ${tenantGuard.tid}`;
+    if (assumeYes) {
+      console.log(`  · tenant confirmed by --yes: ${label}`);
+    } else if (!process.stdin.isTTY) {
+      console.error(
+        `\n❌ Tenant not confirmed: ${label}\n   Non-interactive run — pass --tenant ${tenantGuard.tid} (or --yes) to proceed.\n`
+      );
+      if (browser) await browser.close();
+      process.exit(1);
+    } else {
+      const ok = await confirm(
+        `  → Collect from tenant "${label}"? [y/N] `
+      );
+      if (!ok) {
+        console.error("\n  Aborted — re-run with --tenant <guid> for the tenant you meant.\n");
+        if (browser) await browser.close();
+        process.exit(1);
+      }
+    }
+  }
+
   const coverage = printPermissionMatrix(
     pool.list().map((t) => t.payload),
     { hasPortalSession: !!portalPage }
@@ -1210,6 +1318,8 @@ async function main() {
     portalPage,
     resume: !!resumeDir,
     intelOnly,
+    cache: !noCache,
+    expectedTenantId: tenantGuard.tid,
   });
 
   if (browser) await browser.close();

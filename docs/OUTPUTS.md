@@ -14,6 +14,7 @@ All paths are relative to `output_YYYY-MM-DD_HHMM/`.
 | `00_Expert_Findings.csv` / `.json` | Correlated attack narratives (drives posture score) |
 | `00_Findings.csv` | Inventory findings Severity; Area; Detail |
 | `00_REPORT_DATA.json` | Compact report metadata (score, counts) |
+| `.cache/` | Raw Graph responses keyed by URL, used by `--resume`. Same sensitivity as the CSVs; skip with `--no-cache`, delete before archiving |
 
 ## Tenant & authentication
 
