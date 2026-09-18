@@ -10,6 +10,8 @@ const {
   graphApiWriteHits,
   clusterAlertsBySource,
   isCopilotOrAgentUpn,
+  classifyAccountKind,
+  looksLikeUnlicensedPolicyText,
   patchLagFromSoftwareVersions,
   detectEnforcedMfaCoverage,
   isReportOnlyFleetComplianceRow,
@@ -135,6 +137,29 @@ test("Copilot agent UPNs are not human single-factor", () => {
     true
   );
   assert.equal(isCopilotOrAgentUpn("jane@contoso.com"), false);
+});
+
+test("account kind covers EN / FR / ES room and shared mailboxes", () => {
+  assert.equal(classifyAccountKind("salle-reunion@contoso.com"), "room");
+  assert.equal(classifyAccountKind("conf-room-3@contoso.com"), "room");
+  assert.equal(classifyAccountKind("sala-juntas@contoso.com"), "room");
+  assert.equal(classifyAccountKind("accueil@contoso.com"), "shared");
+  assert.equal(classifyAccountKind("reception@contoso.com"), "shared");
+  assert.equal(classifyAccountKind("contabilidad@contoso.com"), "shared");
+  assert.equal(
+    classifyAccountKind("info@contoso.com", "Buzón compartido Finanzas"),
+    "shared"
+  );
+  assert.equal(classifyAccountKind("reunión-norte@contoso.com"), "room");
+  assert.equal(classifyAccountKind("jane.doe@contoso.com"), "human");
+  assert.equal(classifyAccountKind("salary.smith@contoso.com"), "human");
+});
+
+test("unlicensed CA names match EN / FR / ES", () => {
+  assert.equal(looksLikeUnlicensedPolicyText("Block unlicensed / unmanaged"), true);
+  assert.equal(looksLikeUnlicensedPolicyText("Bloquer sans licence"), true);
+  assert.equal(looksLikeUnlicensedPolicyText("Bloquear sin licencia"), true);
+  assert.equal(looksLikeUnlicensedPolicyText("Require MFA for all users"), false);
 });
 
 test("TVM software versions can show Patch Tuesday lag when DeviceInfo has no UBR", () => {
