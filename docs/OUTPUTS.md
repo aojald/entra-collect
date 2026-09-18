@@ -44,9 +44,9 @@ All paths are relative to `output_YYYY-MM-DD_HHMM/`.
 
 | File | Description |
 |---|---|
-| `03_role_definitions.json` | Role catalog |
-| `03_PrivilegedRoles_Audit.csv` | All directory role assignments (permanent + PIM eligible), including readers |
-| `03_PrivilegedAccounts_HighValue.csv` | High-value roles only |
+| `03_role_definitions.json` | Role catalog (beta, with `isPrivileged` when readable) |
+| `03_PrivilegedRoles_Audit.csv` | One row per *effective* principal: `AssignmentType` = `Permanent` / `PIM — Active (activated)` / `PIM — Eligible`; `Scope` = `Tenant` / `AU` / `App` (+ `ScopeName`); `ViaGroup` when inherited from a role-assignable group (the group shell is kept as its own row); `IsPrivilegedRole` from Graph `isPrivileged` or the built-in high-value list. Source: `roleAssignmentScheduleInstances` (P2/Governance) or `roleAssignments` |
+| `03_PrivilegedAccounts_HighValue.csv` | Privileged roles on effective principals (group members expanded, shells excluded). Only `Permanent` + `Tenant` rows count as standing GA |
 
 ## Apps & guests
 

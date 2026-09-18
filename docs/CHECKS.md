@@ -65,7 +65,7 @@ Examples of findings emitted from the main collector (not only attack-path):
 | Tenants | Users can create tenants |
 | Guests | Invites from everyone |
 | CA | Report-only policies; no device-code CA |
-| Privileged | Permanent GA count; high-value assignments |
+| Privileged | Standing (permanent, tenant-wide) GA count — PIM activations live at collection time and AU/app-scoped assignments are listed but not counted; role-assignable group members are expanded |
 | MFA | Users without MFA registered |
 | InactiveAccounts | Enabled idle accounts |
 | DeviceJoin | Join/register = All users |

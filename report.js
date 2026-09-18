@@ -2397,8 +2397,8 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
   document.getElementById("sec-privileged").innerHTML =
     dormantCard +
     roleTierCards +
-    dataCard("High-value roles", highValueTotal, ["RoleName","PrincipalName","PrincipalType","UPNOrAppId","AssignmentType","PIMEnabled"], D.priv||[]) +
-    dataCard("All directory role assignments", privAllTotal, ["Tier","RoleName","PrincipalName","PrincipalType","UPNOrAppId","AssignmentType","PIMEnabled"], privAllRows, (r,h)=>{
+    dataCard("High-value roles", highValueTotal, ["RoleName","PrincipalName","PrincipalType","UPNOrAppId","AssignmentType","Scope","ViaGroup"], D.priv||[]) +
+    dataCard("All directory role assignments", privAllTotal, ["Tier","RoleName","PrincipalName","PrincipalType","UPNOrAppId","AssignmentType","Scope","ViaGroup"], privAllRows, (r,h)=>{
       if (h==="Tier") {
         if (r[h]==="High-value") return badge("Fail") + ' <span class="muted" style="font-size:11px">high-value</span>';
         if (r[h]==="Data-plane") return badge("Partial") + ' <span class="muted" style="font-size:11px">data-plane</span>';
