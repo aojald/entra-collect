@@ -2117,14 +2117,15 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
         '</details>'
       : '') +
     '<div class="card" style="margin-top:1rem"><h2>CA vs attacker paths</h2>' +
-    table(["Control","Covered","Severity","Policies","Why"], D.caCoverage||[], (r,h)=>{
+    table(["Control","Covered","Severity","Policies","Evidence","Why"], D.caCoverage||[], (r,h)=>{
       const raw = String(r.Covered).toLowerCase();
       const na = raw === "n/a";
       const unknown = raw === "unknown" || raw === "";
+      const partial = raw === "partial";
       const ok = raw === "true" || r.Covered === true;
-      if (h==="Covered") return na ? badge("NotApplicable") : unknown ? badge("Unknown") : ok ? badge("Pass") : badge("Fail");
+      if (h==="Covered") return na ? badge("NotApplicable") : unknown ? badge("Unknown") : ok ? badge("Pass") : partial ? badge("Partial") : badge("Fail");
       if (h==="Severity") return ok || unknown || na ? '<span class="muted">—</span>' : badge(r[h]);
-      return esc(r[h]);
+      return esc(r[h] || "");
     }) + '</div>';
 
   document.getElementById("sec-ca").innerHTML =
