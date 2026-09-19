@@ -52,9 +52,12 @@ All paths are relative to `output_YYYY-MM-DD_HHMM/`.
 
 | File | Description |
 |---|---|
-| `04_SPN_DangerousPerms.csv` | High-risk Graph app role assignments |
+| `04_SPN_DangerousPerms.csv` | High-risk application permissions on Microsoft Graph, Exchange Online (`full_access_as_app`, `Exchange.ManageAsApp`), SharePoint Online and legacy Azure AD Graph (`ResourceAppId` column) |
+| `04_Delegated_Grants_AllPrincipals.csv` | Admin-consented delegated grants for all users, scored on the worst scope (`MaxSeverity`) |
+| `04_SPN_Credentials.csv` | Every secret / certificate on a service-principal object; `MicrosoftOwned=true` rows are the first-party backdoor pattern (Critical), `LongLived` = secret > 2 years |
 | `04_SPN_WildcardReplyUrls.csv` | Wildcard redirect URIs |
 | `04_App_SecretsExpiry.csv` | Secrets expiring / expired (<30d) |
+| `04_App_LongLived_Secrets.csv` | App-registration secrets valid > 2 years |
 | `05_guests.csv` | Guest inventory |
 
 ## MFA, inactive users, devices
