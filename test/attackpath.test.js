@@ -392,3 +392,86 @@ test("new CA scope checks appear with expected verdicts on a hollow all-users po
   const cov = readCoverage(outDir);
   assert.equal(cov.find((r) => /all users on all cloud apps/i.test(r.Control)).Covered, "partial");
 });
+
+test("risk-gated policies do not count as admin / guest MFA; complementary exclusion groups are not bypasses", async () => {
+  const riskAll = {
+    id: "risk",
+    displayName: "High risk users",
+    state: "enabled",
+    conditions: {
+      users: { includeUsers: ["All"] },
+      applications: { includeApplications: ["All"] },
+      clientAppTypes: ["all"],
+      userRiskLevels: ["high"],
+    },
+    grantControls: { operator: "AND", builtInControls: ["mfa", "passwordChange"] },
+  };
+  const portals = {
+    id: "portals",
+    displayName: "MFA for admins (portals)",
+    state: "enabled",
+    conditions: {
+      users: { includeUsers: [], includeRoles: ["62e90394-69f5-4237-9190-012177145e10"] },
+      applications: { includeApplications: ["MicrosoftAdminPortals"] },
+      clientAppTypes: ["all"],
+    },
+    grantControls: { operator: "OR", builtInControls: ["mfa"] },
+  };
+  const internals = {
+    id: "int",
+    displayName: "MFA internals",
+    state: "enabled",
+    conditions: {
+      users: { includeUsers: [], includeGroups: ["g-int"], excludeGroups: ["g-guest"] },
+      applications: { includeApplications: ["All"] },
+      clientAppTypes: ["all"],
+    },
+    grantControls: { operator: "OR", builtInControls: ["mfa"] },
+  };
+  const guests = {
+    id: "gst",
+    displayName: "MFA guests",
+    state: "enabled",
+    conditions: {
+      users: { includeUsers: [], includeGroups: ["g-guest"], excludeGroups: ["g-int"] },
+      applications: { includeApplications: ["All"] },
+      clientAppTypes: ["all"],
+    },
+    grantControls: { operator: "OR", builtInControls: ["mfa"] },
+  };
+  const graph = stubGraph({
+    get: async (url) => {
+      if (/members\/\$count/.test(url)) return 300;
+      if (/owners\/\$count/.test(url)) return 0;
+      if (/\/groups\/(g-int|g-guest)/.test(url)) {
+        const id = url.match(/groups\/([^?/]+)/)[1];
+        return { id, displayName: id, isAssignableToRole: false, groupTypes: [] };
+      }
+      return undefined;
+    },
+  });
+  const outDir = tmpOut();
+  await collectAttackPathChecks(graph, createIo(outDir, { manifest: false }), [], {}, {
+    policies: [ENFORCED_LEGACY_BLOCK, riskAll, portals, internals, guests],
+    authz: { defaultUserRolePermissions: {} },
+    authMethods: { authenticationMethodConfigurations: [] },
+    privRows: [],
+    roleRows: [],
+    dangerousSpnRows: [],
+    regDetails: [],
+  });
+  const cl = readChecklist(outDir);
+  const az = row(cl, "AP.CA.AzureMgmt");
+  assert.equal(az.Status, CHECK.PARTIAL);
+  assert.match(az.Evidence, /Admin portals only/, "risk policy must not satisfy Azure-management MFA");
+  assert.equal(row(cl, "AP.CA.UserRisk").Status, CHECK.PASS);
+  const excl = readCoverage(outDir); // sanity: file exists
+  assert.ok(excl.length);
+  const groups = parseCsv(fs.readFileSync(path.join(outDir, "40_CA_Exclusion_Groups.csv"), "utf8"));
+  assert.equal(groups.length, 2);
+  for (const g of groups) {
+    assert.equal(g.Complementary, "true", `${g.DisplayName} is the include target of the sibling policy`);
+    assert.equal(g.Hardened, "true");
+  }
+  assert.equal(row(cl, "AP.CA.ExclGroups").Status, CHECK.PARTIAL, "complementary but large groups: Partial, not Fail");
+});
