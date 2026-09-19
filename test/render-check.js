@@ -44,17 +44,24 @@ async function main() {
   await page.waitForTimeout(1200);
 
   const text = await page.evaluate(() => document.body.innerText);
+  // The coverage banner sits above the score; the detailed "Incomplete
+  // collection" callout lives inside a collapsed <details>, whose innerText is
+  // empty while folded, so read textContent for both.
   const callout = await page.evaluate(() => {
     const el = [...document.querySelectorAll(".callout")].find((e) =>
-      /Incomplete collection/.test(e.innerText)
+      /Read this first|Incomplete collection/.test(e.textContent || "")
     );
-    return el ? el.innerText : null;
+    return el ? (el.textContent || "").trim().replace(/\s+/g, " ") : null;
   });
+  const dashboardBuilt = await page.evaluate(
+    () => !!document.querySelector("#sec-dashboard .hero-score")
+  );
   const exclFindings = (text.match(/not role-assignable/g) || []).length;
 
   console.log("JS errors:", errors.length ? errors : "none");
-  console.log("\n--- incomplete-collection callout ---");
-  console.log(callout || "(absent)");
+  console.log("dashboard built:", dashboardBuilt);
+  console.log("\n--- coverage callout ---");
+  console.log(callout || "(absent — clean collection)");
   console.log("\n'not role-assignable' occurrences in page:", exclFindings);
 
   const shot = path.resolve(dir, "render-check.png");
@@ -63,7 +70,9 @@ async function main() {
 
   await browser.close();
 
-  const ok = errors.length === 0 && callout && text.length > 2000;
+  // A clean collection legitimately has no coverage callout; the dashboard
+  // itself must still have been built.
+  const ok = errors.length === 0 && dashboardBuilt && text.length > 2000;
   console.log("\n" + (ok ? "✓ dashboard rendered" : "✗ render problem"));
   process.exit(ok ? 0 : 1);
 }

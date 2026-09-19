@@ -649,7 +649,19 @@ function loadCollectionStatus(outDir) {
   if (!manifest) return { available: false, artifacts: {}, failedSteps: [] };
   const failedSteps = Object.entries(manifest.steps || {})
     .filter(([, s]) => s.status === "failed")
-    .map(([label, s]) => ({ label, error: s.error, httpStatus: s.httpStatus }));
+    .map(([label, s]) => ({
+      label,
+      error: s.error,
+      httpStatus: s.httpStatus,
+      code: s.code || "",
+      kind:
+        s.kind ||
+        (s.httpStatus === 401 || s.httpStatus === 403
+          ? "denied"
+          : s.transient
+            ? "transient"
+            : "error"),
+    }));
   return {
     available: true,
     artifacts: manifest.artifacts || {},
@@ -1546,6 +1558,10 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
     return '<div class="finding-card tone-' + tone + prioClass + (compact ? " compact" : "") +
       '" id="' + aid + '" data-narr-id="' + esc(n.Id) + '"><div class="top">' +
       (n.Priority ? badge(n.Priority) : "") + badge(n.Severity) +
+      (n.Confidence && !/^high$/i.test(n.Confidence)
+        ? '<span class="badge badge-warn" title="Confidence in this finding">' + esc(n.Confidence) + ' confidence</span>'
+        : '') +
+      (n.LicenceRequired ? '<span class="badge badge-muted">needs ' + esc(n.LicenceRequired) + '</span>' : '') +
       (area ? '<span class="narr-area">' + esc(area) + '</span>' : '') +
       '<span class="badge badge-muted">' + esc(n.Id) + '</span></div>' +
       '<div style="font-weight:600;margin:.35rem 0;font-family:var(--font-display)">' + esc(n.Title) + '</div>' +
@@ -1706,8 +1722,11 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
   const failedSteps = COL.failedSteps || [];
   // A 401/403 is a missing role, not a glitch: re-running changes nothing, so
   // the two causes need different advice.
-  const deniedSteps = failedSteps.filter(s => s.httpStatus === 401 || s.httpStatus === 403);
-  const retrySteps = failedSteps.filter(s => s.httpStatus !== 401 && s.httpStatus !== 403);
+  const kindOf = (s) => s.kind || (s.httpStatus === 401 || s.httpStatus === 403 ? "denied" : "error");
+  const deniedSteps = failedSteps.filter(s => kindOf(s) === "denied");
+  const licenceSteps = failedSteps.filter(s => kindOf(s) === "licence");
+  const unsupportedSteps = failedSteps.filter(s => kindOf(s) === "unsupported");
+  const retrySteps = failedSteps.filter(s => !["denied","licence","unsupported"].includes(kindOf(s)));
   const stepList = (steps) =>
     '<div class="muted" style="margin-top:.35rem;font-size:12px">' +
     steps.slice(0, 8).map(s => esc(s.label)).join(" · ") +
@@ -1720,6 +1739,16 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
         ? '<div style="margin-top:.5rem">' + deniedSteps.length +
           ' blocked by <strong>missing permissions</strong> (HTTP 401/403) — these need an additional role, not a re-run.' +
           stepList(deniedSteps) + '</div>'
+        : '') +
+      (licenceSteps.length
+        ? '<div style="margin-top:.5rem">' + licenceSteps.length +
+          ' require a <strong>licence the tenant does not have</strong> (P2 / Governance) — scored NotApplicable.' +
+          stepList(licenceSteps) + '</div>'
+        : '') +
+      (unsupportedSteps.length
+        ? '<div style="margin-top:.5rem">' + unsupportedSteps.length +
+          ' rejected by the API (query shape / endpoint) — a re-run will not help.' +
+          stepList(unsupportedSteps) + '</div>'
         : '') +
       (retrySteps.length
         ? '<div style="margin-top:.5rem">' + retrySteps.length +
@@ -1762,7 +1791,51 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
     .filter(r => /fail|partial/i.test(r.Status || ""))
     .sort((a,b) => statusRank(a.Status) - statusRank(b.Status));
 
+  // Coverage banner — before the score, because a 91 computed on a tenant
+  // whose CA / auth-method / registration exports failed is not a 91.
+  const notEvaluated = (D.attackChecklist || []).filter(r => /^(notevaluated|skip)$/i.test(String(r.Status||"").trim()));
+  const notApplicable = (D.attackChecklist || []).filter(r => /^notapplicable$/i.test(String(r.Status||"").trim()));
+  const missingSources = (S.attackPathMissingSources || []).map(String);
+  const SOURCE_LABEL = {
+    caPolicies: "Conditional Access",
+    authMethods: "authentication methods",
+    regDetails: "MFA registration",
+    privRoles: "role assignments",
+    servicePrincipals: "app permissions",
+    servicePrincipalInventory: "service principals",
+    delegatedGrants: "delegated grants",
+    authz: "authorization policy",
+  };
+  const facts = S.tenantFacts || {};
+  const licenceBits = [];
+  if (facts.licencesCollected) {
+    if (facts.p1 === false) licenceBits.push("no Entra ID P1 (Conditional Access unavailable)");
+    else if (facts.p2 === false) licenceBits.push("no Entra ID P2 (Identity Protection / PIM checks not applicable)");
+  }
+  if (facts.securityDefaultsEnabled === true) licenceBits.push("Security Defaults on (CA controls not applicable)");
+  const coverageBanner = (notEvaluated.length || missingSources.length || failedSteps.length || notApplicable.length)
+    ? '<div class="callout ' + ((notEvaluated.length || missingSources.length) ? 'danger' : 'info') + '" style="margin-bottom:1rem">' +
+        '<strong>Read this first — coverage.</strong> ' +
+        (missingSources.length
+          ? 'Not readable with this session: <strong>' + esc(missingSources.map(k => SOURCE_LABEL[k] || k).join(", ")) + '</strong>. '
+          : '') +
+        (notEvaluated.length
+          ? '<strong>' + notEvaluated.length + ' check(s) not evaluated</strong> — they are unknown, not passing' +
+            (notEvaluated.length <= 6 ? ' (' + esc(notEvaluated.map(r => r.CheckId).join(", ")) + ')' : '') + '. '
+          : '') +
+        (notApplicable.length
+          ? notApplicable.length + ' check(s) not applicable to this tenant' + (licenceBits.length ? ' — ' + esc(licenceBits.join("; ")) : '') + '. '
+          : (licenceBits.length ? esc(licenceBits.join("; ")) + '. ' : '')) +
+        (failedSteps.length
+          ? failedSteps.length + ' collection step(s) failed (' + deniedSteps.length + ' permission, ' + licenceSteps.length + ' licence, ' + retrySteps.length + ' other). '
+          : '') +
+        'The posture score below only reflects what was measured. ' +
+        '<button type="button" class="btn btn-sm" data-jump="limits">Limitations</button>' +
+      '</div>'
+    : '';
+
   document.getElementById("sec-dashboard").innerHTML =
+    coverageBanner +
     '<div class="card" style="margin-bottom:1rem">' +
       '<div class="hero-score">' +
         gauge(D.score) +
@@ -2084,7 +2157,7 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
 
   function checklistTable(rows, showSev) {
     return table(
-      showSev ? ["Status","Severity","CheckId","Title","Evidence","WhyItMatters"] : ["Status","CheckId","Title","Evidence","WhyItMatters"],
+      showSev ? ["Status","Severity","Confidence","CheckId","Title","Evidence","WhyItMatters"] : ["Status","CheckId","Title","Evidence","WhyItMatters"],
       rows,
       (r, h) => {
         if (h === "Status") return badge(r[h]);
@@ -2092,7 +2165,12 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
           if (/pass/i.test(r.Status || "")) return '<span class="muted">—</span>';
           return badge(r[h]);
         }
-        return esc(r[h]);
+        if (h === "Confidence") {
+          const c = String(r.Confidence || "");
+          return c ? '<span class="badge ' + (/high/i.test(c) ? 'badge-muted' : 'badge-warn') + '">' + esc(c) + '</span>' : '<span class="muted">—</span>';
+        }
+        if (h === "Evidence") return esc(r[h] || "") + (r.LicenceRequired ? ' <span class="badge badge-muted">needs ' + esc(r.LicenceRequired) + '</span>' : '');
+        return esc(r[h] || "");
       }
     );
   }

@@ -10,9 +10,10 @@ All paths are relative to `output_YYYY-MM-DD_HHMM/`.
 | `00_Remediation_Plan.xlsx` | Steering workbook (This Week / Remediation Plan / Owner · Status · Due) |
 | `00_SUMMARY.md` | Human executive summary |
 | `00_SUMMARY.json` | Machine-readable summary + KPIs |
-| `00_MANIFEST.json` | Per-step collection status (ok / failed / empty) |
-| `00_Expert_Findings.csv` / `.json` | Correlated attack narratives (drives posture score) |
-| `00_Findings.csv` | Inventory findings Severity; Area; Detail |
+| `00_MANIFEST.json` | Per-step collection status (ok / failed / empty / partial / skipped); failed steps carry `kind` = denied / licence / unsupported / transient and the Graph error `code` |
+| `00_Expert_Findings.csv` / `.json` | Correlated attack narratives (drives posture score). Schema v2: `Status`, `Confidence`, `LicenceRequired`, `Rationale` columns; JSON has `schemaVersion`, `statusCount`, `columns` |
+| `00_Findings.csv` | Inventory findings `Severity; Area; Detail` + `Status` (Fail / Info / NotEvaluated / NotApplicable), `Confidence`, `LicenceRequired`, `Rationale` |
+| `01_tenant_facts.json` / `01_Licences.csv` | Security Defaults state, `policyMigrationState`, licence flags (P1 / P2 / Governance / …) from `subscribedSkus` — drives NotApplicable scoring |
 | `00_REPORT_DATA.json` | Compact report metadata (score, counts) |
 | `.cache/` | Raw Graph responses keyed by URL, used by `--resume`. Same sensitivity as the CSVs; skip with `--no-cache`, delete before archiving |
 

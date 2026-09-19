@@ -90,7 +90,8 @@ When admin consent is available for one of:
    ```
 3. **App registration** (best for scheduled or unattended runs)
    ```bat
-   node collect.js --auth app --tenant TENANT --client-id APP --client-secret %ENTRA_CLIENT_SECRET%
+   set ENTRA_CLIENT_SECRET=...   (or --client-secret-file secret.txt)
+   node collect.js --auth app --tenant TENANT --client-id APP
    ```
 
 `mgc` (Microsoft Graph CLI) is detected but **cannot be used as a token source** —
