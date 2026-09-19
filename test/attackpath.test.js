@@ -297,3 +297,98 @@ test("step errors: licence and denied are not transient; invalid filter is unsup
   throttled.status = 429;
   assert.equal(classifyStepError(throttled), ERROR_KIND.TRANSIENT);
 });
+
+test("auth-method verdicts are Partial while the legacy MFA policy migration is incomplete", async () => {
+  const outDir = tmpOut();
+  const findings = [];
+  await collectAttackPathChecks(stubGraph(), createIo(outDir, { manifest: false }), findings, {}, {
+    policies: [ENFORCED_LEGACY_BLOCK],
+    authz: { defaultUserRolePermissions: {} },
+    authMethods: {
+      policyMigrationState: "preMigration",
+      authenticationMethodConfigurations: [{ id: "Sms", state: "disabled" }],
+    },
+    privRows: [],
+    roleRows: [],
+    dangerousSpnRows: [],
+    regDetails: [],
+  });
+  const cl = readChecklist(outDir);
+  assert.equal(row(cl, "AP.MFA.SMS").Status, CHECK.PARTIAL, "disabled in the new policy is not authoritative");
+  assert.equal(row(cl, "AP.MFA.Migration").Status, CHECK.FAIL);
+  assert.ok(findings.some((f) => /migration is "preMigration"/.test(f.Detail)));
+
+  const outDir2 = tmpOut();
+  await collectAttackPathChecks(stubGraph(), createIo(outDir2, { manifest: false }), [], {}, {
+    policies: [ENFORCED_LEGACY_BLOCK],
+    authz: { defaultUserRolePermissions: {} },
+    authMethods: {
+      policyMigrationState: "migrationComplete",
+      authenticationMethodConfigurations: [{ id: "Sms", state: "disabled" }],
+    },
+    privRows: [],
+    roleRows: [],
+    dangerousSpnRows: [],
+    regDetails: [],
+  });
+  const cl2 = readChecklist(outDir2);
+  assert.equal(row(cl2, "AP.MFA.SMS").Status, CHECK.PASS);
+  assert.equal(row(cl2, "AP.MFA.Migration").Status, CHECK.PASS);
+});
+
+test("authorization-policy extras: self-service sign-up and group creation", async () => {
+  const outDir = tmpOut();
+  const findings = [];
+  await collectAttackPathChecks(stubGraph(), createIo(outDir, { manifest: false }), findings, {}, {
+    policies: [ENFORCED_LEGACY_BLOCK],
+    authz: {
+      allowEmailVerifiedUsersToJoinOrganization: true,
+      defaultUserRolePermissions: { allowedToCreateSecurityGroups: true, allowedToReadOtherUsers: true },
+    },
+    authMethods: { authenticationMethodConfigurations: [] },
+    privRows: [],
+    roleRows: [],
+    dangerousSpnRows: [],
+    regDetails: [],
+  });
+  const cl = readChecklist(outDir);
+  assert.equal(row(cl, "AP.Guest.SelfServiceSignup").Status, CHECK.FAIL);
+  assert.equal(row(cl, "AP.Users.CreateSecurityGroups").Status, CHECK.FAIL);
+  assert.ok(findings.some((f) => /Self-service sign-up/.test(f.Detail)));
+});
+
+test("new CA scope checks appear with expected verdicts on a hollow all-users policy", async () => {
+  const GA = "62e90394-69f5-4237-9190-012177145e10";
+  const hollowMfa = {
+    id: "p2",
+    displayName: "Require MFA for all",
+    state: "enabled",
+    conditions: {
+      users: { includeUsers: ["All"], excludeRoles: [GA] },
+      applications: { includeApplications: ["All"] },
+      clientAppTypes: ["all"],
+    },
+    grantControls: { operator: "OR", builtInControls: ["mfa"] },
+  };
+  const outDir = tmpOut();
+  const findings = [];
+  await collectAttackPathChecks(stubGraph(), createIo(outDir, { manifest: false }), findings, {}, {
+    policies: [ENFORCED_LEGACY_BLOCK, hollowMfa],
+    authz: { defaultUserRolePermissions: {} },
+    authMethods: { authenticationMethodConfigurations: [] },
+    privRows: [],
+    roleRows: [],
+    dangerousSpnRows: [],
+    regDetails: [],
+    roleDefMap: { [GA]: "Global Administrator" },
+  });
+  const cl = readChecklist(outDir);
+  assert.equal(row(cl, "AP.CA.AllUsersMfa").Status, CHECK.PARTIAL);
+  assert.match(row(cl, "AP.CA.AllUsersMfa").Evidence, /excludes Global Administrator/);
+  assert.equal(row(cl, "AP.CA.ExclRoles").Status, CHECK.FAIL);
+  assert.equal(row(cl, "AP.CA.AdminPhishingResistant").Status, CHECK.FAIL);
+  assert.equal(row(cl, "AP.CA.DeviceCode").Status, CHECK.FAIL);
+  assert.equal(row(cl, "AP.CA.SessionControls").Status, CHECK.FAIL);
+  const cov = readCoverage(outDir);
+  assert.equal(cov.find((r) => /all users on all cloud apps/i.test(r.Control)).Covered, "partial");
+});

@@ -65,9 +65,11 @@ All paths are relative to `output_YYYY-MM-DD_HHMM/`.
 | File | Description |
 |---|---|
 | `07_user_registration_details.json` | Full registration report |
-| `07_Users_Without_MFA.csv` | `isMfaRegistered=false` |
-| `07_Users_PhishingResistant_or_Passkey.csv` | Passkey / FIDO / WHfB-like |
-| `08_Accounts_Inactive_Nd.csv` | Enabled, idle since N days |
+| `07_Users_Without_MFA.csv` | `isMfaRegistered=false` on *enabled* accounts (joined with the users export; `AccountEnabled`, `UserType` columns) |
+| `07_Users_Without_MFA_Disabled.csv` | Same for disabled accounts — inventory, not a live path |
+| `07_Users_PhishingResistant_or_Passkey.csv` | Strictly phishing-resistant methods: passkey / FIDO2 / WHfB / secure-enclave key / CBA |
+| `07_Users_AuthenticatorPasswordless.csv` | Authenticator phone sign-in only (strong, not phishing-resistant) |
+| `08_Accounts_Inactive_Nd.csv` | Enabled, no interactive, non-interactive or successful sign-in since N days (`LastAny`, `DaysSinceAny`); accounts created in the last 14 days are skipped |
 | `06_device_registration_policy.json` | Who can join/register + MFA |
 | `09_Devices_Stale_Joined_Nm.csv` | Stale Entra/hybrid joined |
 | `09_Devices_Registered_Only.csv` | Workplace / registered only |
@@ -86,6 +88,7 @@ All paths are relative to `output_YYYY-MM-DD_HHMM/`.
 | `11_Defender_Exploitable_Vulns.csv` | TVM hunting (if schema allows) |
 | `11_security_alerts_sample.json` | Fallback alerts sample |
 | `12_*` | Directory / password settings |
+| `12_Federation.csv` | Federated domains: issuer, `federatedIdpMfaBehavior`, signed-request requirement, signing-cert state |
 | `13_*` | SSPR registration signals |
 | `14_Log_Retention_Notes.csv` | Where logs live by default |
 
@@ -94,6 +97,7 @@ All paths are relative to `output_YYYY-MM-DD_HHMM/`.
 | File | Description |
 |---|---|
 | `15_*` | SharePoint / cross-tenant access |
+| `15_CrossTenant_Trust.csv` | Default + per-partner inbound trust (MFA / compliant / hybrid device claims), B2B direct connect, automatic redemption |
 | `16_*` | Teams / group guest settings |
 | `17_*` | Anti-spam checklist (+ EmailEvents sample if available) |
 | `18_*` | Mailbox forwarding checks / outbound domains |
