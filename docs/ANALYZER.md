@@ -45,7 +45,15 @@ node report.js output_YYYY-MM-DD_HHMM
 | `NARR.CA.ReportOnlyHardening` | High | Token Protection / phishing-resistant report-only |
 | `NARR.CA.TrustedIpHygiene` | High | Public DNS (e.g. `1.1.1.1`) in trusted named locations |
 | `NARR.CA.AzureMgmt` | Medium | Azure Management Partial |
-| `NARR.MFA.MassGap` | Low→High | `07_Users_Without_MFA` + All-users / license-gate CA (role-only and risk MFA do not count as coverage) |
+| `NARR.MFA.MassGap` | Low→High | Members vs guests in `07_Users_Without_MFA` — guests MFA at home; inbound trust is the guest path |
+| `NARR.MFA.WeakMethods` | High/Crit | SMS / voice / e-mail still enabled + unprotected security-info registration |
+| `NARR.App.MailboxAccess` | High/Crit | `full_access_as_app` / `Mail.*` application permissions ∩ SPN sign-ins |
+| `NARR.App.SecretLifecycle` | Med/High | Long-lived + expired secrets; supersedes `ExpiredSecrets` when present |
+| `NARR.CA.SessionControls` | Med/High | No sign-in frequency / persistent-browser=never on population policies |
+| `NARR.External.InboundTrust` | Med/High | Default cross-tenant inbound MFA / device trust |
+| `NARR.CA.OrphanReferences` | Low/Med | Deleted user ids still in CA include/exclude |
+| `NARR.Devices.LocalAdmin` | Med/High | GA (and optionally the joining user) is local admin on Entra-joined devices |
+| `NARR.Chain.ShortestPath` | High/Crit | Synthesis of open stages — score-neutral, read this first |
 | `NARR.Endpoint.RmmSuspicious` | High/Med | Desktop RMM *agents* after noise filter (`30_RMM_*`) |
 | `NARR.Endpoint.RmmInventoryNoise` | Info | Mobile/viewer/QuickSupport-only inventory |
 | `NARR.Endpoint.TvmCves` | High | Unpatched Critical/High CVEs — `11_*` + `32_TVM_Windows_*` |
@@ -80,9 +88,15 @@ usually what decides remediation order:
   for an intrusion to stand out against (`DormantAdmin`);
 - dormant single-factor accounts are the password-spray surface
   (`InactiveNoMfa`), counted on members only — a guest authenticates against
-  its home tenant, so "no MFA registered here" would be misleading.
+  its home tenant, so "no MFA registered here" would be misleading;
+- `MassGap` uses the same split: title and severity follow **members**. Guests
+  are mentioned only as a path when default inbound MFA trust is on.
 
 ## Output contract (schema version 2)
+
+Narratives also carry `Impact` — one sentence on what an attacker gets if the
+finding stays open. The HTML report shows it above the story; Excel puts it in
+**If this stays open**.
 
 `00_Expert_Findings.csv` / `.json` (`schemaVersion: 2`) and `00_Findings.csv` share four columns beyond severity:
 
@@ -97,7 +111,7 @@ Severity vocabulary is the same everywhere: `Critical` · `High` · `Medium` · 
 
 ## Scoring
 
-`scoreFromNarratives` starts from a base and subtracts by severity (Critical/High heavier). Clamped ~20–100. Report dashboard uses this score (not raw inventory finding counts). Only a **real** MFA compensation (`compensated=true` in the MassGap evidence: All-users MFA on all apps, protected security-info registration, no broad exclusions) softens the gauge — a policy name mentioning licences does not.
+`scoreFromNarratives` starts from a base and subtracts by severity (Critical/High heavier). Clamped ~20–100. Report dashboard uses this score (not raw inventory finding counts). `NARR.Chain.ShortestPath` is score-neutral (it restates other narratives). Only a **real** MFA compensation (`compensated=true` in the MassGap evidence: All-users MFA on all apps, protected security-info registration, no broad exclusions) softens the gauge — a policy name mentioning licences does not. A guest-heavy MassGap is also softened: guests are not password-only targets in *this* tenant.
 
 ## Design notes
 
