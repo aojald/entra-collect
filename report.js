@@ -909,6 +909,10 @@ function buildReportPayload(outDir) {
     summary.usersWithoutMfaHuman != null
       ? summary.usersWithoutMfaHuman
       : noMfaBreak.human;
+  summary.usersWithoutMfaGuests =
+    summary.usersWithoutMfaGuests != null
+      ? summary.usersWithoutMfaGuests
+      : noMfaBreak.guest;
   summary.usersWithoutMfaNonHuman =
     summary.usersWithoutMfaNonHuman != null
       ? summary.usersWithoutMfaNonHuman
@@ -1269,6 +1273,21 @@ tr:hover td { background: var(--row-hover); }
 }
 .finding-card.priority-now { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); background: var(--priority-now-bg); }
 .finding-card.priority-next { border-color: color-mix(in srgb, var(--warn) 35%, var(--border)); background: var(--priority-next-bg); }
+.finding-card.chain-card {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 20%, transparent);
+}
+.narr-impact {
+  font-size: .9rem; line-height: 1.45; margin: .2rem 0 .55rem;
+  padding: .45rem .7rem; border-left: 3px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 7%, transparent);
+}
+.narr-impact .impact-h {
+  text-transform: uppercase; letter-spacing: .05em; font-size: 10.5px;
+  font-weight: 600; color: var(--danger); margin-bottom: .15rem;
+}
+.rem-steps { margin: .15rem 0 0 1.1rem; padding: 0; }
+.rem-steps li { margin: .25rem 0; }
 .finding-card .top { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; margin-bottom: .35rem; }
 .finding-card.compact { opacity: .92; padding: .55rem .75rem; font-size: .86rem; }
 .finding-card.compact .dash-fix { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -1472,8 +1491,9 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
     [/^NARR\.(App|Consent)\./i, "apps", "Apps"],
     [/^NARR\.Priv\./i, "privileged", "Privileged"],
     [/^NARR\.CA\./i, "ca", "Conditional Access"],
-    [/^NARR\.(MFA|Identity|Guest)\./i, "users", "Users & MFA"],
-    [/^NARR\.(DeviceCode|Legacy|Risk)\./i, "identity", "Sign-in signals"],
+    [/^NARR\.(MFA|Identity|Guest|External)\./i, "users", "Users & MFA"],
+    [/^NARR\.Chain\./i, "attackpath", "Attack path"],
+    [/^NARR\.(DeviceCode|Legacy|Risk|Auth)\./i, "identity", "Sign-in signals"],
     [/^NARR\.(Endpoint|Cloud)\./i, "endpoints", "Endpoints"],
     [/^NARR\.Mail\./i, "collab", "Mail & collab"],
     [/^NARR\.Devices\./i, "devices", "Devices"],
@@ -1529,22 +1549,46 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
         : "") + '</div>';
   }
 
+  function remStepsHtml(text) {
+    const raw = String(text || "").trim();
+    if (!raw) return "";
+    const parts = raw
+      .split(/(?=\s*\d+[.)]\s+)/)
+      .map((s) => s.replace(/^\s*\d+[.)]\s+/, "").trim())
+      .filter(Boolean);
+    if (parts.length >= 2) {
+      return '<ol class="rem-steps">' + parts.map((p) => "<li>" + esc(p) + "</li>").join("") + "</ol>";
+    }
+    return esc(raw);
+  }
+  function firstFixLine(text) {
+    const raw = String(text || "").trim();
+    const m = raw.match(/(?:^|\s)1[.)]\s+(.+?)(?=\s+2[.)]\s+|$)/);
+    if (m) return m[1].trim();
+    const sent = raw.match(/^(.+?[.!?])(?:\s|$)/);
+    return (sent && sent[1]) || raw;
+  }
   function narrCard(n, compact) {
     const tone = /critical/i.test(n.Severity) ? "danger" : /high/i.test(n.Severity) ? "danger" : /medium/i.test(n.Severity) ? "warn" : "info";
     const prio = String(n.Priority || "").toLowerCase();
     const prioClass = prio === "now" ? " priority-now" : prio === "next" ? " priority-next" : "";
+    const chain = /^NARR\.Chain\./i.test(n.Id || "");
     const dd = deepDiveFor(n.Id);
     const area = areaFromId(n.Id);
     const aid = "narr-" + String(n.Id || "").replace(/[^a-zA-Z0-9._-]/g, "_");
+    const impact = n.Impact || "";
     const body = compact
-      ? '<div class="dash-fix">' + esc((n.Narrative||"").slice(0, 140)) +
-        ((n.Narrative||"").length > 140 ? "…" : "") + '</div>' +
+      ? '<div class="dash-fix">' + esc((impact || n.Narrative || "").slice(0, 140)) +
+        ((impact || n.Narrative || "").length > 140 ? "…" : "") + '</div>' +
         '<div class="finding-actions">' +
           '<button type="button" class="btn btn-sm" data-open-narr="' + esc(n.Id) + '">Open</button>' +
         '</div>'
-      : '<div style="margin-bottom:.55rem;line-height:1.45">' + esc(n.Narrative) + '</div>' +
+      : (impact
+          ? '<div class="narr-impact"><div class="impact-h">If this stays open</div>' + esc(impact) + '</div>'
+          : "") +
+        '<div style="margin-bottom:.55rem;line-height:1.45">' + esc(n.Narrative) + '</div>' +
         (n.Remediation
-          ? '<div class="remediation"><strong>Fix</strong> ' + esc(n.Remediation) + '</div>'
+          ? '<div class="remediation"><strong>Close this path</strong> ' + remStepsHtml(n.Remediation) + '</div>'
           : '') +
         '<details class="evidence-more" style="margin:.35rem 0 .5rem"><summary>Evidence &amp; files</summary>' +
           evidenceBlock(n.Evidence, { open: true }) +
@@ -1555,8 +1599,9 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
           '<button type="button" class="btn btn-sm" data-copy-fix="' + esc(n.Id) + '">Copy fix</button>' +
           '<button type="button" class="btn btn-sm" data-copy-finding="' + esc(n.Id) + '">Copy finding</button>' +
         '</div>';
-    return '<div class="finding-card tone-' + tone + prioClass + (compact ? " compact" : "") +
+    return '<div class="finding-card tone-' + tone + prioClass + (chain ? " chain-card" : "") + (compact ? " compact" : "") +
       '" id="' + aid + '" data-narr-id="' + esc(n.Id) + '"><div class="top">' +
+      (chain ? '<span class="badge badge-danger">Read first</span>' : "") +
       (n.Priority ? badge(n.Priority) : "") + badge(n.Severity) +
       (n.Confidence && !/^high$/i.test(n.Confidence)
         ? '<span class="badge badge-warn" title="Confidence in this finding">' + esc(n.Confidence) + ' confidence</span>'
@@ -1568,14 +1613,16 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
       body + '</div>';
   }
   function narrActionRow(n) {
+    const blurb = n.Impact || n.Narrative || "";
+    const fix = firstFixLine(n.Remediation || "");
     return '<tr>' +
       '<td>' + (n.Priority ? badge(n.Priority) : "") + '</td>' +
       '<td>' + badge(n.Severity) + '</td>' +
       '<td><strong>' + esc(n.Title) + '</strong>' +
-        '<div class="dash-fix">' + esc((n.Narrative || "").slice(0, 110)) +
-        ((n.Narrative || "").length > 110 ? "…" : "") + '</div></td>' +
-      '<td class="dash-fix">' + esc((n.Remediation || "").slice(0, 140)) +
-        ((n.Remediation || "").length > 140 ? "…" : "") + '</td>' +
+        '<div class="dash-fix">' + esc(blurb.slice(0, 140)) +
+        (blurb.length > 140 ? "…" : "") + '</div></td>' +
+      '<td class="dash-fix">' + esc(fix.slice(0, 160)) +
+        (fix.length > 160 ? "…" : "") + '</td>' +
       '<td><button type="button" class="btn btn-sm" data-open-narr="' + esc(n.Id) + '">Open</button></td></tr>';
   }
   function toneCard(label, value, hint, tone) {
@@ -1781,10 +1828,11 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
     const p = n.Priority || ( /critical/i.test(n.Severity) ? "Now" : /high/i.test(n.Severity) ? "Next" : "Later");
     (narrByPrio[p] || narrByPrio.Later).push(n);
   }
+  const chainNarr = (D.narratives || []).find((n) => n.Id === "NARR.Chain.ShortestPath");
   const topActions = [
     ...(narrByPrio.Now || []),
     ...(narrByPrio.Next || []),
-  ].slice(0, 10);
+  ].filter((n) => n.Id !== "NARR.Chain.ShortestPath").slice(0, 10);
   const coverageNotes = [incompleteNote, limitNote, errNote].filter(Boolean).join("");
 
   const gapRows = (D.attackChecklist || [])
@@ -1834,8 +1882,16 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
       '</div>'
     : '';
 
+  const chainBanner = chainNarr
+    ? '<div class="callout danger" style="margin-bottom:1rem"><strong>Shortest path to compromise.</strong> ' +
+      esc(chainNarr.Title) +
+      (chainNarr.Impact ? " — " + esc(chainNarr.Impact) : "") +
+      ' <button type="button" class="btn btn-sm" data-open-narr="' + esc(chainNarr.Id) + '">Open the chain</button></div>'
+    : "";
+
   document.getElementById("sec-dashboard").innerHTML =
     coverageBanner +
+    chainBanner +
     '<div class="card" style="margin-bottom:1rem">' +
       '<div class="hero-score">' +
         gauge(D.score) +
@@ -1885,9 +1941,14 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
           (() => {
             const total = Number(S.usersWithoutMfa) || 0;
             const human = Number(S.usersWithoutMfaHuman);
+            const guests = Number(S.usersWithoutMfaGuests);
             const humanOk = Number.isFinite(human);
-            const label = total && humanOk ? (human + " / " + total) : (S.usersWithoutMfa ?? "n/a");
-            return toneCard("No MFA", label, humanOk ? "humans / total" : "registrations", (humanOk ? human : total) >= 100 ? "warn" : total ? "info" : "success");
+            const guestOk = Number.isFinite(guests) && guests > 0;
+            const label = guestOk && humanOk
+              ? (human + " / " + guests)
+              : total && humanOk ? (human + " / " + total) : (S.usersWithoutMfa ?? "n/a");
+            const hint = guestOk ? "members / guests without a method" : humanOk ? "humans / total" : "registrations";
+            return toneCard("No MFA", label, hint, (humanOk ? human : total) >= 100 ? "warn" : total ? "info" : "success");
           })() +
           toneCard("Device-code", S.deviceCodeUsers90d ?? "n/a", "users 90d", Number(S.deviceCodeUsers90d) > 0 ? "danger" : "success") +
           toneCard("Risky users", S.riskyUsersAtRisk ?? "n/a", "", Number(S.riskyUsersAtRisk) > 0 ? "warn" : "success") +
@@ -1906,7 +1967,7 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
   // ── Expert narratives
   const narrAreas = [...new Set((D.narratives || []).map(n => areaFromId(n.Id)).filter(Boolean))].sort();
   document.getElementById("sec-narratives").innerHTML =
-    '<div class="callout success"><strong>How to use this tab.</strong> Work <em>Now → Next → Later</em>. Use <strong>Table</strong> for steering (copy Fix / open deep dive). Evidence stays collapsed until you need it.</div>' +
+    '<div class="callout success"><strong>How to use this tab.</strong> These are attack paths, not a compliance list. Each card says what an attacker can do if it stays open, then the step that closes it. Work <em>Now → Next → Later</em>. Evidence stays collapsed until you need it.</div>' +
     '<div class="toolbar">' +
       '<input id="narrFilter" placeholder="Filter title, fix, id…" />' +
       '<select id="narrPrio"><option value="">All priorities</option><option>Now</option><option>Next</option><option>Later</option></select>' +
@@ -1953,7 +2014,7 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
           '<td>' + badge(n.Severity) + '</td>' +
           '<td class="narr-area">' + esc(areaFromId(n.Id)) + '</td>' +
           '<td><strong>' + esc(n.Title) + '</strong><div class="dash-fix">' + esc(n.Id) + '</div></td>' +
-          '<td class="dash-fix">' + esc((n.Remediation || "").slice(0, 180)) + '</td>' +
+          '<td class="dash-fix">' + esc(firstFixLine(n.Remediation || "").slice(0, 180)) + '</td>' +
           '<td style="white-space:nowrap">' +
             '<button type="button" class="btn btn-sm" data-open-narr="' + esc(n.Id) + '">Card</button> ' +
             '<button type="button" class="btn btn-sm" data-copy-fix="' + esc(n.Id) + '">Copy fix</button>' +
@@ -2078,7 +2139,7 @@ window.__REPORT__ = JSON.parse(document.getElementById("report-data").textConten
       const n = (D.narratives || []).find(x => x.Id === id);
       if (n) {
         copyText(
-          [n.Priority, n.Severity, n.Id, n.Title, "", n.Narrative || "", "", "Fix: " + (n.Remediation || ""), "", "Evidence: " + (n.Evidence || "")].join("\\n"),
+          [n.Priority, n.Severity, n.Id, n.Title, "", n.Impact ? "If this stays open: " + n.Impact : "", n.Narrative || "", "", "Close this path: " + (n.Remediation || ""), "", "Evidence: " + (n.Evidence || "")].join("\\n"),
           copyFinding
         );
       }
