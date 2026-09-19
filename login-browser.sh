@@ -25,9 +25,11 @@ else
   PROFILE_ROOT="${XDG_STATE_HOME:-$HOME/.local/state}/entra-collect/profiles"
 fi
 
+# No --remote-allow-origins: Playwright attaches without an Origin header, and
+# the flag would let any web page talk to the debugging socket of an admin
+# session for the whole run.
 COMMON_ARGS=(
   --remote-debugging-port="${PORT}"
-  --remote-allow-origins="*"
   --no-first-run
   --no-default-browser-check
   --enable-features=WebAuthenticationHybridTransports,WebAuthnHybridLinking,WebAuthnSecurityKeyAndQrCodeUiRefresh

@@ -34,6 +34,11 @@
 | `lib/hunt.js` | Advanced Hunting: **portal apiproxy → Graph → legacy MTP** |
 | `lib/analyze.js` | Static correlation → `NARR.*` + posture score |
 | `lib/attackpath.js` | Consent / CA coverage / priv hygiene → `40_*` |
+| `lib/tenantFacts.js` | Licences (`subscribedSkus`), Security Defaults, auth-method migration state → NotApplicable scoring |
+| `lib/roles.js` | Directory roles by effective principal: schedule instances, group expansion, scope |
+| `lib/apps.js` | App roles on Graph / EXO / SPO / AAD Graph, delegated AllPrincipals grants, SP credentials |
+| `lib/caScope.js` | Effective scope of each CA policy + full / partial / none coverage verdicts |
+| `lib/findings.js` | Output contract v2: Status / Confidence / LicenceRequired / Rationale |
 | `lib/endpoints.js` | RMM / AI / patch / TVM / GenAI / file-share / Intune |
 | `lib/intel.js` | Adaptive intel: alerts / Exposure Graph / IdentityLogon (MDE-optional) |
 | `lib/xlsxReport.js` | Remediation workbook builder |
@@ -88,7 +93,7 @@ portal session stays open.
 | Transient failures | `lib/net.js` | Hard timeout per request; retry with exponential backoff on network errors, 408, 429, 5xx. Deterministic 4xx fail immediately. |
 | Step failures | `io.soft()` | One whole-step retry when the cause looks transient, then `ERROR_*.json` + a manifest entry. Single definition, shared by all modules. |
 | Failure vs empty | `00_MANIFEST.json` | Every artifact records `ok` / `empty` / `failed` / `partial` / `skipped`, so an outage is never rendered as a clean zero. |
-| False positives | `ctx.sources` in `attackpath.js` | Checks whose input was not collected become `Skip` + a `Coverage` finding, instead of `Fail`. |
+| False positives | `ctx.sources` in `attackpath.js` | Checks whose input was not collected become `NotEvaluated` + a `Coverage` finding, instead of `Fail`; checks the tenant cannot satisfy (licence / Security Defaults, `lib/tenantFacts.js`) become `NotApplicable`. |
 | Resume | `lib/cache.js` | Responses are cached by URL/query. `--resume DIR` replays the pipeline while serving successful calls from `.cache/`, so only failed steps hit the network. Caching at the transport layer keeps every downstream side effect intact. |
 
 ## Hunting (`lib/hunt.js`)

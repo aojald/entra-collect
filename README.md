@@ -50,7 +50,7 @@ npm install
 ./login-browser.sh
 # Sign in to the target tenant in the Edge/Brave window (QR / MFA)
 
-node collect.js --auth browser --cdp http://127.0.0.1:9222 \
+node collect.js --auth browser --cdp http://127.0.0.1:9222 --tenant <customer-tenant-guid> \
   --inactive-days 90 --device-stale-months 3 --signin-days 30,90
 ```
 
@@ -58,10 +58,17 @@ node collect.js --auth browser --cdp http://127.0.0.1:9222 \
 
 ```bat
 login-edge.cmd
-node collect.js --auth browser --cdp http://127.0.0.1:9222
+node collect.js --auth browser --cdp http://127.0.0.1:9222 --tenant <customer-tenant-guid>
 ```
 
 Or use `collect.cmd` / `--auth auto` (tries Azure CLI / Graph PowerShell first).
+
+### Tenant, output and secrets
+
+- **Tenant**: pass `--tenant <guid>`. Without it the tool resolves the tenant from the first token it sees and asks you to confirm the organisation name before writing anything (`--yes` skips the prompt for scripted runs). Tokens, portal hunting headers and `--resume` folders from another tenant are refused.
+- **Output**: `output_YYYY-MM-DD_HHMM/` is created in the **current directory** (override with `--out DIR`). `output_*/.cache/` keeps raw Graph responses for `--resume`; add `--no-cache` if you do not need it — it is as sensitive as the CSVs.
+- **App-only**: give the client secret via `ENTRA_CLIENT_SECRET` or `--client-secret-file FILE`. `--client-secret` on the command line still works but is deprecated (visible in `ps` / shell history).
+- **Browser**: the launched browser is closed at the end of the run (its debugging port would otherwise stay open on an admin session); `--keep-browser` keeps it. With `--cdp` you started the browser yourself — close it when done.
 
 ### After collection
 
@@ -131,8 +138,11 @@ Examples:
 - Standing / hybrid Global Administrators  
 - CA exclusion groups that are not role-assignable  
 - Live high-privilege SPN sign-ins vs dormant grants  
-- MFA registration gaps **downgraded** when enforced MFA CA already exists  
+- MFA registration gaps **downgraded** only when All-users MFA *and* a protected security-info registration exist (an account with no method is otherwise one password away from an attacker enrolling their own)  
 - Failed logons framed as office-egress noise vs external spray  
+- Credentials on Microsoft first-party service principals, broad delegated grants, federated-IdP MFA trust
+
+Every check and narrative carries a **Status** (`Pass` / `Fail` / `Partial` / `NotEvaluated` / `NotApplicable`), a **Confidence** and the **licence** it depends on. A check whose input could not be collected is *NotEvaluated*, never *Pass*; a control the tenant cannot have (no P2, Security Defaults on) is *NotApplicable*, never *Fail*. Conditional Access is scored on each policy's **effective scope** (all users, all apps, exclusions), not on its display name.
 
 Re-run anytime: `node analyze.js <output_dir>`.
 

@@ -10,10 +10,12 @@ All paths are relative to `output_YYYY-MM-DD_HHMM/`.
 | `00_Remediation_Plan.xlsx` | Steering workbook (This Week / Remediation Plan / Owner · Status · Due) |
 | `00_SUMMARY.md` | Human executive summary |
 | `00_SUMMARY.json` | Machine-readable summary + KPIs |
-| `00_MANIFEST.json` | Per-step collection status (ok / failed / empty) |
-| `00_Expert_Findings.csv` / `.json` | Correlated attack narratives (drives posture score) |
-| `00_Findings.csv` | Inventory findings Severity; Area; Detail |
+| `00_MANIFEST.json` | Per-step collection status (ok / failed / empty / partial / skipped); failed steps carry `kind` = denied / licence / unsupported / transient and the Graph error `code` |
+| `00_Expert_Findings.csv` / `.json` | Correlated attack narratives (drives posture score). Schema v2: `Status`, `Confidence`, `LicenceRequired`, `Rationale` columns; JSON has `schemaVersion`, `statusCount`, `columns` |
+| `00_Findings.csv` | Inventory findings `Severity; Area; Detail` + `Status` (Fail / Info / NotEvaluated / NotApplicable), `Confidence`, `LicenceRequired`, `Rationale` |
+| `01_tenant_facts.json` / `01_Licences.csv` | Security Defaults state, `policyMigrationState`, licence flags (P1 / P2 / Governance / …) from `subscribedSkus` — drives NotApplicable scoring |
 | `00_REPORT_DATA.json` | Compact report metadata (score, counts) |
+| `.cache/` | Raw Graph responses keyed by URL, used by `--resume`. Same sensitivity as the CSVs; skip with `--no-cache`, delete before archiving |
 
 ## Tenant & authentication
 
@@ -43,17 +45,20 @@ All paths are relative to `output_YYYY-MM-DD_HHMM/`.
 
 | File | Description |
 |---|---|
-| `03_role_definitions.json` | Role catalog |
-| `03_PrivilegedRoles_Audit.csv` | All directory role assignments (permanent + PIM eligible), including readers |
-| `03_PrivilegedAccounts_HighValue.csv` | High-value roles only |
+| `03_role_definitions.json` | Role catalog (beta, with `isPrivileged` when readable) |
+| `03_PrivilegedRoles_Audit.csv` | One row per *effective* principal: `AssignmentType` = `Permanent` / `PIM — Active (activated)` / `PIM — Eligible`; `Scope` = `Tenant` / `AU` / `App` (+ `ScopeName`); `ViaGroup` when inherited from a role-assignable group (the group shell is kept as its own row); `IsPrivilegedRole` from Graph `isPrivileged` or the built-in high-value list. Source: `roleAssignmentScheduleInstances` (P2/Governance) or `roleAssignments` |
+| `03_PrivilegedAccounts_HighValue.csv` | Privileged roles on effective principals (group members expanded, shells excluded). Only `Permanent` + `Tenant` rows count as standing GA |
 
 ## Apps & guests
 
 | File | Description |
 |---|---|
-| `04_SPN_DangerousPerms.csv` | High-risk Graph app role assignments |
+| `04_SPN_DangerousPerms.csv` | High-risk application permissions on Microsoft Graph, Exchange Online (`full_access_as_app`, `Exchange.ManageAsApp`), SharePoint Online and legacy Azure AD Graph (`ResourceAppId` column) |
+| `04_Delegated_Grants_AllPrincipals.csv` | Admin-consented delegated grants for all users, scored on the worst scope (`MaxSeverity`) |
+| `04_SPN_Credentials.csv` | Every secret / certificate on a service-principal object; `MicrosoftOwned=true` rows are the first-party backdoor pattern (Critical), `LongLived` = secret > 2 years |
 | `04_SPN_WildcardReplyUrls.csv` | Wildcard redirect URIs |
 | `04_App_SecretsExpiry.csv` | Secrets expiring / expired (<30d) |
+| `04_App_LongLived_Secrets.csv` | App-registration secrets valid > 2 years |
 | `05_guests.csv` | Guest inventory |
 
 ## MFA, inactive users, devices
@@ -61,9 +66,11 @@ All paths are relative to `output_YYYY-MM-DD_HHMM/`.
 | File | Description |
 |---|---|
 | `07_user_registration_details.json` | Full registration report |
-| `07_Users_Without_MFA.csv` | `isMfaRegistered=false` |
-| `07_Users_PhishingResistant_or_Passkey.csv` | Passkey / FIDO / WHfB-like |
-| `08_Accounts_Inactive_Nd.csv` | Enabled, idle since N days |
+| `07_Users_Without_MFA.csv` | `isMfaRegistered=false` on *enabled* accounts (joined with the users export; `AccountEnabled`, `UserType` columns) |
+| `07_Users_Without_MFA_Disabled.csv` | Same for disabled accounts — inventory, not a live path |
+| `07_Users_PhishingResistant_or_Passkey.csv` | Strictly phishing-resistant methods: passkey / FIDO2 / WHfB / secure-enclave key / CBA |
+| `07_Users_AuthenticatorPasswordless.csv` | Authenticator phone sign-in only (strong, not phishing-resistant) |
+| `08_Accounts_Inactive_Nd.csv` | Enabled, no interactive, non-interactive or successful sign-in since N days (`LastAny`, `DaysSinceAny`); accounts created in the last 14 days are skipped |
 | `06_device_registration_policy.json` | Who can join/register + MFA |
 | `09_Devices_Stale_Joined_Nm.csv` | Stale Entra/hybrid joined |
 | `09_Devices_Registered_Only.csv` | Workplace / registered only |
@@ -82,6 +89,7 @@ All paths are relative to `output_YYYY-MM-DD_HHMM/`.
 | `11_Defender_Exploitable_Vulns.csv` | TVM hunting (if schema allows) |
 | `11_security_alerts_sample.json` | Fallback alerts sample |
 | `12_*` | Directory / password settings |
+| `12_Federation.csv` | Federated domains: issuer, `federatedIdpMfaBehavior`, signed-request requirement, signing-cert state |
 | `13_*` | SSPR registration signals |
 | `14_Log_Retention_Notes.csv` | Where logs live by default |
 
@@ -90,6 +98,7 @@ All paths are relative to `output_YYYY-MM-DD_HHMM/`.
 | File | Description |
 |---|---|
 | `15_*` | SharePoint / cross-tenant access |
+| `15_CrossTenant_Trust.csv` | Default + per-partner inbound trust (MFA / compliant / hybrid device claims), B2B direct connect, automatic redemption |
 | `16_*` | Teams / group guest settings |
 | `17_*` | Anti-spam checklist (+ EmailEvents sample if available) |
 | `18_*` | Mailbox forwarding checks / outbound domains |

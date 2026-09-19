@@ -17,28 +17,40 @@ This tool mixes **inventory** (facts for the report) and **attack-path checks** 
 | `AP.MFA.Voice` | Voice MFA disabled | Phone-based bypass |
 | `AP.MFA.EmailOTP` | Email OTP disabled | Mailbox → MFA bypass |
 | `AP.MFA.TAP` | TAP one-time & short-lived | Standing password equivalent |
-| `AP.MFA.NumberMatch` | Authenticator number matching | MFA fatigue / push bombing |
+| `AP.MFA.NumberMatch` | Authenticator number matching (Info only — platform-enforced since May 2023) | MFA fatigue / push bombing |
+| `AP.CA.DeviceCode` | CA blocks device code / auth transfer for all users | Device-code phishing → PRT without a password |
 | `AP.CA.LegacyBlock` | CA blocks legacy auth | Password spray without MFA |
 | `AP.CA.AzureMgmt` | MFA for Azure / admin portals | Control-plane after password theft |
-| `AP.CA.SignInRisk` | Sign-in risk MFA/block | Impossible travel / unfamiliar sign-in |
-| `AP.CA.UserRisk` | User risk block / password change | At-risk users keep working |
+| `AP.CA.SignInRisk` | Sign-in risk MFA/block (P2) | Impossible travel / unfamiliar sign-in |
+| `AP.CA.UserRisk` | User risk block / password change (P2) | At-risk users keep working |
 | `AP.CA.GuestMfa` | MFA for guests | Invited guest foothold |
+| `AP.CA.AllUsersMfa` | MFA for all users on all cloud apps | Password-only sign-in anywhere in the population |
+| `AP.CA.AdminPhishingResistant` | Phishing-resistant strength for Global Administrators | AitM / token replay against admins |
+| `AP.CA.ExclRoles` | All-users policies do not exclude GA / PRA / PAA | Administrators carved out of every control |
 | `AP.CA.SecInfoReg` | Protect Register security info | MFA method takeover |
+| `AP.CA.SessionControls` | Sign-in frequency + never-persistent browser on population policies | Stolen sessions stay valid for weeks |
 | `AP.CA.GrantOR` | Device + MFA use AND | MFA alone bypasses compliance |
-| `AP.CA.ExclGroups` | CA exclude groups role-assignable | Add-self → bypass all CA |
+| `AP.CA.ExclGroups` | CA exclude groups role-assignable, static, small | Add-self → bypass all CA |
+| `AP.CA.SecurityDefaults` | Info row when Security Defaults are on | Design state — CA controls NotApplicable |
 | `AP.Priv.HybridGA` | GAs not on-prem synced | AD compromise → cloud GA |
 | `AP.Priv.GaMfa` | Every GA has MFA registered | Password-only GA |
 | `AP.App.PathToGA` | No apps with GA-path Graph perms | App secret → Global Admin |
+| `AP.App.FirstPartyCreds` | No credentials on Microsoft first-party service principals | Persistence backdoor after compromise |
+| `AP.App.DelegatedGrants` | No broad AllPrincipals delegated grants to third-party apps | Every user's token → mailbox / directory write |
 | `AP.App.Management` | App management policies enabled | Unrestricted secrets / URIs |
 | `AP.CA.DirSync` | Sync accounts CA hygiene | Break sync or leave sync unprotected |
 
-Statuses: **Pass** · **Fail** · **Partial** · **Info** · **Skip**
+Statuses: **Pass** · **Fail** · **Partial** · **Info** · **NotEvaluated** (input not collected) · **NotApplicable** (licence / Security Defaults). Every row also carries `Confidence`, `LicenceRequired` and `Rationale`.
+
+### Effective scope, not policy names
+
+Every CA verdict is computed on the *effective scope* of each policy (`lib/caScope.js`): a policy counts as coverage only when it is **enforced**, targets **all users** and **all cloud apps** (or the roles the control is about) and is not hollowed out by exclusions — Global / Privileged Role Administrator excluded, ≥3 excluded roles or groups, ≥10 excluded users, or excluded groups holding ≥25 members in total. Anything else is **Partial** with the reason (`not all users`, `not all apps`, `excludes Global Administrator`, `broad exclusions`) in the Evidence column. Display names are never used.
 
 ---
 
 ## CA coverage matrix (`40_CA_AttackPath_Coverage.csv`)
 
-For each attacker-relevant control, the tool records whether any **enforced** CA policy covers it and which policy names matched:
+For each attacker-relevant control, the tool records whether an **enforced, population-wide** CA policy covers it (`Covered` = `true` / `partial` / `false` / `unknown` / `n/a`), which policy names matched and, for `partial`, why:
 
 - Device code / auth transfer  
 - Legacy authentication block  
@@ -46,6 +58,8 @@ For each attacker-relevant control, the tool records whether any **enforced** CA
 - Sign-in risk  
 - User risk  
 - Guest MFA  
+- MFA for all users on all cloud apps  
+- Phishing-resistant MFA for Global Administrators  
 - Security-info registration  
 
 Also flags:
@@ -65,7 +79,7 @@ Examples of findings emitted from the main collector (not only attack-path):
 | Tenants | Users can create tenants |
 | Guests | Invites from everyone |
 | CA | Report-only policies; no device-code CA |
-| Privileged | Permanent GA count; high-value assignments |
+| Privileged | Standing (permanent, tenant-wide) GA count — PIM activations live at collection time and AU/app-scoped assignments are listed but not counted; role-assignable group members are expanded |
 | MFA | Users without MFA registered |
 | InactiveAccounts | Enabled idle accounts |
 | DeviceJoin | Join/register = All users |

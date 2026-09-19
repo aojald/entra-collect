@@ -27,11 +27,13 @@ npm run collect:azure   # --portal azure
 | Flag | Default | Meaning |
 |---|---|---|
 | `--portal entra\|azure` | `entra` | Home portal + blade tour |
-| `--out DIR` | tool folder | Where `output_*` directories are created |
+| `--out DIR` | current directory | Where `output_*` directories are created |
+| `--no-cache` | off | Do not keep raw Graph responses in `output_*/.cache` (disables `--resume` for that run) |
+| `--yes` | off | Skip the interactive tenant confirmation when `--tenant` is not given (scripted runs) |
 | `--resume DIR` | off | Re-run into an existing output dir, retrying only failed steps |
 | `--intel-only` | off | With `--resume`: skip Graph inventory, re-run adaptive intel hunts (alerts / exposure / IdentityInfo / GraphAPI writes) |
 | `--check-permissions` | off | Print the scope-coverage matrix and exit without collecting |
-| `--tenant TENANT_ID` | — | Tenant id (required for `--auth app`; optional elsewhere) |
+| `--tenant TENANT_ID` | — | Tenant id. Required for `--auth app`; otherwise the resolved organisation must be confirmed interactively (or `--yes`). Tokens, portal hunting headers and `--resume` folders from another tenant are refused |
 | `--inactive-days N` | `90` | Enabled accounts with no sign-in since N days |
 | `--device-stale-months N` | `3` | Joined/hybrid devices not seen since N months |
 | `--signin-days A,B,…` | `30,90` | Device-code (and related) sign-in windows |
@@ -42,9 +44,11 @@ npm run collect:azure   # --portal azure
 | `--headless` | off | Headless Chromium (login usually needs headed) |
 | `--browser auto\|brave\|msedge\|chrome\|chromium` | `auto` | Platform preference order (Brave→Edge→Chrome on macOS; Edge first on Windows) |
 | `--cdp URL` | off | Attach to a browser started via `./login-browser.sh` / `login-edge.cmd` |
+| `--cdp-port N` | `9222` | Debugging port when the tool launches the browser itself |
+| `--keep-browser` | off | Leave a browser the tool launched (and its debugging port) open at the end |
 | `--no-passkeys` | off | Disable WebAuthn (password / Authenticator push only) |
 | `--auth auto\|cli\|browser\|device\|app` | `auto` | See below |
-| `--client-id` / `--client-secret` / `--client-cert` / `--client-cert-key` | — | App-only credentials (implies `--auth app`) |
+| `--client-id` / `--client-secret-file` / `--client-cert` / `--client-cert-key` | — | App-only credentials (implies `--auth app`). Secret via `ENTRA_CLIENT_SECRET` or `--client-secret-file FILE`; `--client-secret VALUE` is deprecated (visible in `ps` / shell history) |
 
 ### Auth modes
 
@@ -74,8 +78,8 @@ that exports a bearer token. Use `Connect-MgGraph` or `az` instead.
 ```bash
 node collect.js --auth app \
   --tenant 00000000-0000-0000-0000-000000000000 \
-  --client-id 11111111-1111-1111-1111-111111111111 \
-  --client-secret "$ENTRA_CLIENT_SECRET"
+  --client-id 11111111-1111-1111-1111-111111111111
+# secret read from ENTRA_CLIENT_SECRET (or --client-secret-file ./secret.txt)
 
 # or with a certificate
 node collect.js --auth app --tenant … --client-id … \
@@ -210,10 +214,12 @@ node collect.js --auth browser --cdp http://127.0.0.1:9222 --resume output_YYYY-
 node collect.js --auth browser --cdp http://127.0.0.1:9222 --resume output_YYYY-MM-DD_HHMM --intel-only
 ```
 
-### Checks that are skipped rather than failed
+### Checks that are NotEvaluated / NotApplicable rather than failed
 
-When a source cannot be collected, the checks derived from it are marked `Skip`
-instead of `Fail`, and a `Coverage` finding is raised. A failed Conditional
+When a source cannot be collected, the checks derived from it are marked `NotEvaluated`
+instead of `Fail`, and a `Coverage` finding is raised. When the tenant cannot be in the
+tested state (no Entra ID P2, Security Defaults on) the check is `NotApplicable` with the
+licence it would need. The report opens with a coverage banner listing both. A failed Conditional
 Access export used to produce High findings such as "no legacy-auth block" —
 which described the outage, not the tenant.
 

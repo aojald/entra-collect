@@ -27,6 +27,8 @@ node report.js output_YYYY-MM-DD_HHMM
 | `NARR.App.SpnActive` | High/Med | `04_SPN_DangerousPerms` ∩ `27_SPN_SignIns_*` / digest — join on AppId / SP id, not display name |
 | `NARR.App.SpnDormant` | Med/Low | Same join, inverted — dangerous grants with no sign-in (removal candidates) |
 | `NARR.App.ExpiredSecrets` | Med/Low | `04_App_SecretsExpiry` |
+| `NARR.App.FirstPartyCredential` | Critical/High | `04_SPN_Credentials` — secret / cert on a Microsoft first-party SP (persistence backdoor) |
+| `NARR.App.DelegatedBroadGrants` | High/Med | `04_Delegated_Grants_AllPrincipals` — admin-consented delegated write / mailbox scopes for all users |
 | `NARR.Priv.DormantAdmin` | Critical/High | `08_Accounts_Inactive_*` ∩ privileged roles, minus accounts matching the break-glass pattern |
 | `NARR.Priv.BreakGlass` | Info/Medium | Dormant GAs excluded from most enforced CA in `02_CA_Audit` — the designed emergency accounts, judged on their controls rather than on dormancy |
 | `NARR.Identity.InactiveNoMfa` | High/Med/Low | Inactive **member** accounts ∩ `07_Users_Without_MFA` (guests excluded), split into humans vs rooms/shared/service, downgraded when CA already gates the population |
@@ -80,15 +82,30 @@ usually what decides remediation order:
   (`InactiveNoMfa`), counted on members only — a guest authenticates against
   its home tenant, so "no MFA registered here" would be misleading.
 
+## Output contract (schema version 2)
+
+`00_Expert_Findings.csv` / `.json` (`schemaVersion: 2`) and `00_Findings.csv` share four columns beyond severity:
+
+| Column | Values | Meaning |
+|---|---|---|
+| `Status` | `Fail` · `Info` · `NotEvaluated` · `NotApplicable` (checklist adds `Pass` / `Partial`) | `NotEvaluated` = the input was not collected — unknown, never a pass. `NotApplicable` = the tenant cannot be in the tested state (no P2, Security Defaults on). |
+| `Confidence` | `High` · `Medium` · `Low` | `Medium` when the verdict rests on a partial / sampled pull or an All-users fallback; `Low` for name heuristics (break-glass, service-account naming). |
+| `LicenceRequired` | `""` · `P1` · `P2` · `Governance` | Licence the control depends on. |
+| `Rationale` | free text | One line on why this status. |
+
+Severity vocabulary is the same everywhere: `Critical` · `High` · `Medium` · `Low` · `Info`. Inventory findings (`00_Findings.csv`) use `High` / `Medium` / `Info` (plus `Critical` for the first-party credential backdoor); narratives use the full range.
+
 ## Scoring
 
-`scoreFromNarratives` starts from a base and subtracts by severity (Critical/High heavier). Clamped ~20–100. Report dashboard uses this score (not raw inventory finding counts).
+`scoreFromNarratives` starts from a base and subtracts by severity (Critical/High heavier). Clamped ~20–100. Report dashboard uses this score (not raw inventory finding counts). Only a **real** MFA compensation (`compensated=true` in the MassGap evidence: All-users MFA on all apps, protected security-info registration, no broad exclusions) softens the gauge — a policy name mentioning licences does not.
 
 ## Design notes
 
 - Prefer **attack-path language** (what an attacker does next) over compliance checklists.
-- Downgrade when compensating controls exist (e.g. MFA gap + unmanaged-user block CA).
+- Downgrade only for *verified* compensating controls, evaluated on raw policy JSON (`lib/caScope.js`) — never on display names.
+- A password-only account that meets an MFA grant is sent to **registration**, not denied; All-users MFA therefore only compensates a registration gap when *Register security info* is itself protected by CA.
 - Do not narrate Fail for Guest MFA when checklist is **Pass** / **Partial**.
+- Counts derived from a failed export are `null` in `00_SUMMARY.json` and narrated as *unknown* — never as zero.
 - See [FALSE_POSITIVES.md](FALSE_POSITIVES.md) for dismissal rules that feed analyzer inputs.
 
 ## What the hunting tables cannot tell you

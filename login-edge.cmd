@@ -44,7 +44,9 @@ echo Sign in in that Edge window ^(Authenticator / Windows Hello / QR^), then:
 echo   node collect.js --auth browser --cdp http://127.0.0.1:%PORT%
 echo.
 
-start "" "%EDGE%" --remote-debugging-port=%PORT% --remote-allow-origins=* --user-data-dir="%PROFILE%" --no-first-run --no-default-browser-check "%URL%"
+REM No --remote-allow-origins: Playwright attaches without an Origin header, and the
+REM flag would let any web page talk to the debugging socket of an admin session.
+start "" "%EDGE%" --remote-debugging-port=%PORT% --user-data-dir="%PROFILE%" --no-first-run --no-default-browser-check "%URL%"
 
 echo Waiting for CDP on port %PORT%...
 for /L %%i in (1,1,60) do (

@@ -46,7 +46,7 @@ Does not re-collect from the tenant.
 
 Usage:
   node analyze.js [outputDir]
-  node analyze.js                 # latest non-empty output_* under this folder
+  node analyze.js                 # latest non-empty output_* in the current directory
   node analyze.js --help
 
 Examples:
@@ -65,8 +65,14 @@ function main(argvOut) {
     printHelp();
     process.exit(0);
   }
-  const base = path.resolve(__dirname);
-  const outDir = argvOut ? path.resolve(argvOut) : latestOutputDir(base);
+  // Collections default to the working directory; the tool folder is only a
+  // fallback for older layouts.
+  const outDir = argvOut
+    ? path.resolve(argvOut)
+    : latestOutputDir(process.cwd()) ||
+      (path.resolve(process.cwd()) !== path.resolve(__dirname)
+        ? latestOutputDir(path.resolve(__dirname))
+        : null);
   if (!outDir || !fs.existsSync(outDir)) {
     console.error(
       "No output directory found.\n" +
