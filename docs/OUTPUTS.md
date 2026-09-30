@@ -116,12 +116,13 @@ All paths are relative to `output_YYYY-MM-DD_HHMM/`.
 |---|---|
 | `20_DeviceCode_SignIns_*.csv` | Device code events |
 | `20_signIns_raw_capanalyzer.json` | Bounded raw Graph signIns for CapAnalyzer Sign-in Replay |
-| `20_DeviceCode_Users_*.csv` | Rollup by user |
+| `20_DeviceCode_Users_*.csv` | Rollup by user. Written only when the window has events |
 | `20_DeviceCode_Blocked_*.csv` | Failed device-code (CA effectiveness) |
 | `21_LegacyAuth_Success_*.csv` | Legacy client successes |
+| `21_LegacyAuth_ByAccount_*.csv` | Same events rolled up per account. Written only when the window has successes |
 | `22_FailedSignIns_ByIP_*.csv` | Failure clusters (if hunting identity) |
 | `23_SingleFactor_Success_*.csv` | Non-MFA successes (if hunting) |
-| `24_RiskyUsers.csv` | Identity Protection at-risk |
+| `24_RiskyUsers.csv` | Identity Protection at-risk (`RiskLevel`, `RiskState`, `RiskDetail`, `LastUpdated`) |
 | `25_HighValue_CloudAppEvents_*.csv` | Role/consent/app events (if table exists) |
 | `26_AdminTooling_SignIns_*.csv` | Azure CLI / Graph CLI / AAD PowerShell |
 | `27_SPN_SignIns_*.csv` | Service-principal sign-ins (focus Critical/High SPNs) |
@@ -131,9 +132,12 @@ All paths are relative to `output_YYYY-MM-DD_HHMM/`.
 | File | Description |
 |---|---|
 | `30_patch_tuesday_reference.json` | Live CU / Patch Tuesday map (Microsoft Learn; fallback if fetch fails) |
-| `30_RMM_*.csv` | RMM detections + family prevalence |
-| `30_RMM_Dismissed_Artefacts.csv` | Noise dismissed as collaboration viewers (not desktop agents) |
-| `31_AI_Agents_*.csv` | AI agent process/software signals |
+| `30_RMM_Detections.csv` | One row per inventory or process hit, before the per-device rollup |
+| `30_RMM_Affected_Assets.csv` | One row per device and family. `RiskClass` is `agent`, `viewer`, `mobile`, `adhoc`, `meeting`, or `unknown`. Prevalence uses `Signal=true` only. `EvidenceTrace` is the binary (`vncviewer.exe` against `vnc_server` / `winvnc.exe` / `TeamViewer_Service.exe`). `unknown` + `Signal=true` means a host component was seen and the label stayed unclassified |
+| `30_RMM_Family_Summary.csv` | `AgentDevices`, `ViewerDevices`, `NoiseDevices`, and the prevalence verdict. The corporate-RMM assumption counts agent hosts only |
+| `30_RMM_Dismissed_Artefacts.csv` | GoTo Meeting / LogMeIn Live. VNC viewers stay in `30_RMM_Affected_Assets.csv` as `viewer` |
+| `31_AI_Agents_Devices.csv` | One row per device and file path (30d). No command line |
+| `31_AI_Agents_Summary.csv` | Rollup by family and source. `SampleDevices` and `SampleSignals` are separate `make_set`s: a command line in the signal sample is not tied to a hostname in the device sample |
 | `32_*` | OS builds, Win10, behind Patch Tuesday, TVM OS CVEs |
 | `33_Intune_UpdateRings*.csv/json` | WUfB / feature / quality profiles |
 | `34_GenAI_Usage_*.csv` | GenAI CloudApp / network reach |
@@ -144,6 +148,8 @@ All paths are relative to `output_YYYY-MM-DD_HHMM/`.
 Collected by `lib/intel.js` whenever Alert / Exposure Graph / IdentityLogon /
 CloudApp tables exist. On tenants without Device* hunting tables these are the
 primary hunting-backed artifacts.
+
+Alerts, IdentityInfo, and failed logons in this section, and the exploitable-CVE export under `11_`, stop at `take 200`. A file whose data rows stop at 200 is a sample. That cap is inside the KQL. The manifest stays `ok`. Graph page caps are the ones recorded as `partial` — see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 | File | Description |
 |---|---|
@@ -163,7 +169,7 @@ Related Graph digests (same “no MDE” path, from `lib/logs.js`):
 
 | File | Description |
 |---|---|
-| `21_LegacyAuth_ByAccount_*.csv` | Legacy auth concentrated per account (e.g. shared SMTP) |
+| `21_LegacyAuth_ByAccount_*.csv` | Legacy auth concentrated per account (e.g. shared SMTP). Same file as in the sign-in section; written only when that window has successes |
 | `24_RiskDetections_90d.csv` | Identity Protection risk detections |
 | `27_SPN_SignIns_Digest_*.csv` | Volume rollup for high-priv / top SPNs |
 | `28_Privileged_SignIns_30d.csv` | Graph sign-ins for privileged UPNs |

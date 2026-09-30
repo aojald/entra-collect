@@ -57,17 +57,19 @@ Requires **Node.js 18+** on all platforms.
 npm install
 ./login-browser.sh                    # Edge by default; optional: brave|chrome
 # Complete MFA / passkey QR in the window
-node collect.js --auth browser --cdp http://127.0.0.1:9222
+node collect.js --auth browser --cdp http://127.0.0.1:9222 \
+  --tenant <customer-tenant-guid>
 ```
 
-`login-browser.sh` uses `open -a` so **Bluetooth hybrid passkey** transport works.
+`login-browser.sh` uses `open -a` so **Bluetooth hybrid passkey** transport works. Pass `--tenant`. Without it the tool resolves the tenant from the first token and asks you to confirm the organisation name before writing anything.
 
 ### Linux
 
 ```bash
 npm install
 ./login-browser.sh 9222 https://entra.microsoft.com msedge
-node collect.js --auth browser --cdp http://127.0.0.1:9222
+node collect.js --auth browser --cdp http://127.0.0.1:9222 \
+  --tenant <customer-tenant-guid>
 ```
 
 Headless CI is better served by `--auth app` (client credentials) than by headed CDP.
@@ -77,7 +79,7 @@ Headless CI is better served by `--auth app` (client credentials) than by headed
 ```bat
 npm install
 login-edge.cmd
-node collect.js --auth browser --cdp http://127.0.0.1:9222
+node collect.js --auth browser --cdp http://127.0.0.1:9222 --tenant <customer-tenant-guid>
 ```
 
 Or `collect.cmd` / `--auth auto` after `az login` or `Connect-MgGraph`.  

@@ -20,13 +20,29 @@ Lessons from real tenant collections (Advanced Hunting / TVM / process telemetry
 - No RMM C2 network to logmein/gotoassist.
 - Optional: old `LogMeIn Installer` only under personal Google Drive sync paths = archive artefact.
 
-## TeamViewer QuickSupport (iOS)
+## TeamViewer QuickSupport and mobile clients
 
-May be a support app, not a full RMM host. Still surfaces as low-prevalence RMM — review context (owner, process, prevalence) before treating as foothold.
+`lib/rmmClassify.js` marks QuickSupport / add-ons as `adhoc` and Android / iOS clients as `mobile`. Both have `Signal=false`, so they do not count toward agent prevalence. A full TeamViewer or AnyDesk install is still `agent`: the same binary is the client and the host. `TeamViewer_Service.exe` is the listening service. A TVM row that only says `teamviewer` has no role.
+
+## VNC viewer against VNC server
+
+`realvnc_viewer` / `vncviewer.exe` is `RiskClass=viewer` (`Signal=false`). `vnc_server`, `winvnc.exe`, `vncagent.exe`, and `vncserverui.exe` are host components. RealVNC Server often lands as `RiskClass=unknown` with `Signal=true` because the family label is not itself a server token — read `EvidenceTrace`, not the class name. TightVNC inventory with no `tvnserver.exe` or `tvnviewer.exe` is treated as a host by default; that is an assumption, not a process proof.
 
 ## AI agent noise
 
-Broad patterns (e.g. `copilot`, Edge WebView helpers) can inflate `31_AI_Agents_*`. Prefer family summaries over raw process rows; enterprise Copilot ≠ shadow Claude/Perplexity/LM Studio.
+Broad patterns (Git bash, `git.exe`, `cmd.exe`, `node.exe` next to an agent) land in `31_AI_Agents_Devices.csv` as `OtherAI`. That file proves the binary ran. It does not carry the command line.
+
+`31_AI_Agents_Summary.csv` adds command lines and URLs in `SampleSignals`, and hostnames in `SampleDevices`. Those two columns are separate `make_set`s on the family. Do not attach a `gh` argument, a commit message, or a URL to the first hostname in the row.
+
+Enterprise Copilot (`github.copilot`, `api.individual.githubcopilot.com`) is not the same finding as Claude, Perplexity, or LM Studio.
+
+## General rule
+
+Elevate an endpoint finding only when inventory and a process or network event agree, or when agent prevalence is high enough to treat the tool as corporate RMM. A vendor string alone is not a listening host. A 403 or a missing token is unknown, not a pass. A hunting file that stops at 200 rows is a sample.
+
+## Already fixed
+
+The notes below are historical. Current builds already behave as described. They are not open review items.
 
 ## Guest MFA detection (fixed)
 
@@ -73,7 +89,3 @@ Neither is phishing-resistant. `07_Users_PhishingResistant_or_Passkey.csv` now h
 ## Stale SUMMARY.md
 
 Post-process (dismiss RMM, backfill TVM, re-analyze) can leave `00_SUMMARY.md` Findings out of date. `analyzeOutputDir` now refreshes the Findings + Expert posture section from current CSVs. Prefer `00_Expert_Findings.json` / `00_REPORT.html` as source of truth.
-
-## General rule
-
-Elevate endpoint findings only when **inventory + process/network** (or high prevalence corporate RMM) agree. Vendor string alone is insufficient.

@@ -310,14 +310,16 @@
             <h3 style="margin-top:0">macOS / Linux</h3>
             <pre>./login-browser.sh
 node collect.js --auth browser \
-  --cdp http://127.0.0.1:9222</pre>
+  --cdp http://127.0.0.1:9222 \
+  --tenant &lt;customer-tenant-guid&gt;</pre>
             <p class="muted" style="margin:0;font-size:13px">Dedicated CDP profile. macOS uses <code>open -a</code> so Bluetooth passkey QR works.</p>
           </div>
           <div class="card">
             <h3 style="margin-top:0">Windows</h3>
             <pre>login-edge.cmd
 node collect.js --auth browser ^
-  --cdp http://127.0.0.1:9222</pre>
+  --cdp http://127.0.0.1:9222 ^
+  --tenant &lt;customer-tenant-guid&gt;</pre>
             <p class="muted" style="margin:0;font-size:13px">Native Node — no WSL. Or <code>collect.cmd</code> / <code>--auth auto</code> with Azure CLI.</p>
           </div>
         </div>
@@ -446,13 +448,14 @@ node collect.js --check-permissions --auth browser --cdp http://127.0.0.1:9222
 
 # Full run
 node collect.js --auth browser --cdp http://127.0.0.1:9222 \
+  --tenant &lt;customer-tenant-guid&gt; \
   --inactive-days 90 --device-stale-months 3 --signin-days 30,90
 
 # Resume failed steps only
 node collect.js --resume output_YYYY-MM-DD_HHMM
 
 # Report
-node report.js</pre>
+node report.js output_YYYY-MM-DD_HHMM</pre>
       </section>
 
       <section id="docs">

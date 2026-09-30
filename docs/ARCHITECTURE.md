@@ -129,7 +129,7 @@ See [OUTPUTS.md](OUTPUTS.md). Highlights: `00_` summary/report, `02_` CA, `03_` 
 | Failed logons / admin tooling (partial) | `EntraIdSignInEvents` / `AADSignInEventsBeta` / `SigninLogs` / `IdentityLogonEvents` | `logs.js` + `schema.js` KQL dialects |
 | Defender alerts, exposure-critical assets, privileged IdentityLogon activity | `AlertInfo`, `ExposureGraph*`, `IdentityLogonEvents` | `lib/intel.js` — **runs with or without MDE** |
 
-On an MDE-light tenant (Identity + CloudApp + Alerts + Exposure Graph, no Device* tables), endpoint CSVs stay empty by design and adaptive intel (`36_`–`39_`) carries the hunting signal — including IdentityInfo/AccountInfo inventory and Exposure Graph paths when event tables are empty. Graph digests (`21_LegacyAuth_ByAccount`, `24_RiskDetections`, `27_SPN_SignIns_Digest`, `28_Privileged_SignIns`) fill the same gap from auditLogs. On a full MDE tenant both paths run.
+On an MDE-light tenant (Identity + CloudApp + Alerts + Exposure Graph, no Device* tables), endpoint CSVs stay empty by design and adaptive intel (`36_`–`39_`) carries the hunting signal — including IdentityInfo/AccountInfo inventory and Exposure Graph paths when event tables are empty. Graph digests (`21_LegacyAuth_Success`, `21_LegacyAuth_ByAccount` when that window has successes, `24_RiskDetections`, `27_SPN_SignIns_Digest`, `28_Privileged_SignIns`) fill the same gap from auditLogs. On a full MDE tenant both paths run.
 
 ## Analyzer + report
 
@@ -144,8 +144,9 @@ On an MDE-light tenant (Identity + CloudApp + Alerts + Exposure Graph, no Device
   rotation on 401/403 and a pool refresh when every token is stale.
 - Read-through cache when resuming; write-through always, so any run can be resumed later.
 - Hunting POSTs are routed through `lib/hunt.js`.
-- Capped pagination marks the result `truncated`, which the manifest records as
+- Capped Graph pagination marks the result `truncated`, which the manifest records as
   `partial` rather than a confident count.
+- Hunting queries that end in `take 200` (alerts, exploitable CVEs, IdentityInfo, failed logons) are a different cap. The CSV stops looking full, the manifest stays `ok`, and `SampleDevices` / `SampleSignals` on one summary row are not paired. See [OUTPUTS.md](OUTPUTS.md) and [FALSE_POSITIVES.md](FALSE_POSITIVES.md).
 
 ## Report hardening (`report.js`)
 
