@@ -44,9 +44,31 @@ cdp_up() {
   fi
 }
 
+print_next() {
+  cat <<EOF
+
+Entra Collect — browser ready
+  CDP        http://127.0.0.1:${PORT}
+
+Sign in in that window, then run:
+
+  node collect.js --auth browser --cdp http://127.0.0.1:${PORT} --tenant <guid>
+
+Without --tenant the tool asks you to confirm the organisation name
+before it writes anything.
+
+When the run finishes:
+  output_*/00_REPORT.html
+  output_*/00_Remediation_Plan.xlsx
+
+If a step failed:
+  node collect.js --resume output_YYYY-MM-DD_HHMM
+EOF
+}
+
 if cdp_up; then
-  echo "CDP already listening on ${PORT} — you can run:"
-  echo "  node collect.js --auth browser --cdp http://127.0.0.1:${PORT}"
+  echo "Entra Collect — CDP already listening on port ${PORT}."
+  print_next
   exit 0
 fi
 
@@ -95,9 +117,11 @@ BROWSER_NAME="${SELECTED%%:*}"
 PROFILE="${PROFILE_ROOT}/${BROWSER_ID}-cdp"
 mkdir -p "${PROFILE}"
 
-echo "Browser: ${BROWSER_NAME}"
-echo "Profile: ${PROFILE}   (dedicated — sign in again here)"
-echo "CDP:     http://127.0.0.1:${PORT}"
+echo "Entra Collect — opening browser"
+echo "  browser    ${BROWSER_NAME}"
+echo "  profile    ${PROFILE}"
+echo "  CDP        http://127.0.0.1:${PORT}"
+echo "  sign-in    dedicated profile — sign in again in this window"
 echo ""
 
 if [[ "$OSTYPE" == darwin* ]]; then
@@ -120,10 +144,7 @@ printf "Waiting for CDP on port %s" "${PORT}"
 for _ in $(seq 1 60); do
   if cdp_up; then
     echo " — OK"
-    echo ""
-    echo "Entra Collect — CDP ready. Sign in in that window, then:"
-    echo "  node collect.js --auth browser --cdp http://127.0.0.1:${PORT}"
-    echo "  Help: node collect.js --help"
+    print_next
     exit 0
   fi
   printf "."

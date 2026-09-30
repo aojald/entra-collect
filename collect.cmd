@@ -15,12 +15,11 @@ if not exist "node_modules\playwright" (
 )
 
 echo.
-echo Entra Collect — Windows launcher
-echo   auth=auto  (Azure CLI / Graph PowerShell if available, else browser)
-echo   Recommended for MFA/passkeys:
-echo     login-edge.cmd
-echo     node collect.js --auth browser --cdp http://127.0.0.1:9222
-echo   Help: node collect.js --help
+echo Entra Collect
+echo   mode       auto  ^(Azure CLI / Graph PowerShell, else browser^)
+echo   passkeys   login-edge.cmd
+echo              node collect.js --auth browser --cdp http://127.0.0.1:9222 --tenant ^<guid^>
+echo   help       node collect.js --help
 echo.
 
 node collect.js --auth auto %*
@@ -30,7 +29,9 @@ if %ERR% neq 0 (
   echo Collector exited with code %ERR%
   exit /b %ERR%
 )
-echo Open the latest output_*\00_REPORT.html
-echo   Excel workbook: output_*\00_Remediation_Plan.xlsx
-echo   Rebuild: node report.js output_YYYY-MM-DD_HHMM
+echo Done.
+echo   report     output_*\00_REPORT.html
+echo   workbook   output_*\00_Remediation_Plan.xlsx
+echo   rebuild    node report.js output_YYYY-MM-DD_HHMM
+echo   resume     node collect.js --resume output_YYYY-MM-DD_HHMM
 exit /b 0

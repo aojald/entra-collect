@@ -30,18 +30,15 @@ if not exist "%PROFILE%" mkdir "%PROFILE%" 2>nul
 
 curl -sf "http://127.0.0.1:%PORT%/json/version" >nul 2>&1
 if not errorlevel 1 (
-  echo Entra Collect — CDP already up on port %PORT%.
-  echo   cd /d "%ROOT%"
-  echo   node collect.js --auth browser --cdp http://127.0.0.1:%PORT%
+  echo Entra Collect — CDP already listening on port %PORT%.
+  call :next
   exit /b 0
 )
 
-echo Entra Collect — starting Edge ^(dedicated CDP profile^)...
-echo   profile: %PROFILE%
-echo   CDP:     http://127.0.0.1:%PORT%
-echo.
-echo Sign in in that Edge window ^(Authenticator / Windows Hello / QR^), then:
-echo   node collect.js --auth browser --cdp http://127.0.0.1:%PORT%
+echo Entra Collect — opening Edge
+echo   profile    %PROFILE%
+echo   CDP        http://127.0.0.1:%PORT%
+echo   sign-in    dedicated profile — sign in again in this window
 echo.
 
 REM No --remote-allow-origins: Playwright attaches without an Origin header, and the
@@ -61,9 +58,26 @@ echo   Or enable remote debugging in edge://inspect
 exit /b 1
 
 :ok
-echo CDP OK — ready for Entra Collect.
+echo CDP OK.
+call :next
+exit /b 0
+
+:next
 echo.
+echo Entra Collect — browser ready
+echo   CDP        http://127.0.0.1:%PORT%
+echo.
+echo Sign in in that window, then from this folder:
 echo   cd /d "%ROOT%"
-echo   node collect.js --auth browser --cdp http://127.0.0.1:%PORT%
-echo   Help: node collect.js --help
+echo   node collect.js --auth browser --cdp http://127.0.0.1:%PORT% --tenant ^<guid^>
+echo.
+echo Without --tenant the tool asks you to confirm the organisation name
+echo before it writes anything.
+echo.
+echo When the run finishes:
+echo   output_*\00_REPORT.html
+echo   output_*\00_Remediation_Plan.xlsx
+echo.
+echo If a step failed:
+echo   node collect.js --resume output_YYYY-MM-DD_HHMM
 exit /b 0

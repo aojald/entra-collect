@@ -52,7 +52,10 @@ Usage:
 Recommended (interactive portal + MFA / passkeys):
   macOS/Linux:  ./login-browser.sh
   Windows:      login-edge.cmd
-  then:         node collect.js --auth browser --cdp http://127.0.0.1:9222
+  then:         node collect.js --auth browser --cdp http://127.0.0.1:9222 --tenant <guid>
+
+  Without --tenant the tool resolves the tenant from the first token and
+  asks you to confirm the organisation name before it writes anything.
 
 Auth:
   --auth auto|cli|browser|device|app
@@ -1062,18 +1065,19 @@ async function main() {
     console.error("--intel-only requires --resume DIR (existing output folder)");
     process.exit(1);
   }
-  console.log("Entra Collect — attack-path assessment");
-  console.log(`Output: ${outDir}`);
-  console.log(`Platform: ${process.platform} | auth: ${authMode}`);
-  console.log(`Start URL (browser fallback): ${HOME_URL}`);
+  console.log("Entra Collect");
+  console.log(`  output     ${outDir}`);
+  console.log(`  platform   ${process.platform}    auth ${authMode}`);
+  console.log(`  tenant     ${tenantId || "confirm after sign-in"}`);
   console.log(
-    `Flags: inactiveDays=${inactiveDays} deviceStaleMonths=${deviceStaleMonths} signInDays=${signInDays.join(",")} rmmLegitThreshold=${rmmLegitThreshold}${intelOnly ? " intelOnly=true" : ""}`
+    `  window     inactive ${inactiveDays}d · stale devices ${deviceStaleMonths}mo · sign-ins ${signInDays.join(",")}`
   );
+  if (intelOnly) console.log("  scope      intel only");
   if (authMode !== "cli" && authMode !== "app") {
     console.log(
       waitEnter
-        ? "Browser MFA: press Enter after MFA when the portal is visible (default)"
-        : `Browser MFA: auto-continue after --mfa-wait ${mfaWaitSec}s`
+        ? "  sign-in    press Enter once the portal is visible"
+        : `  sign-in    continue after ${mfaWaitSec}s (--mfa-wait)`
     );
   }
   console.log("");
@@ -1323,13 +1327,15 @@ async function main() {
   });
 
   if (browser) await browser.close();
-  console.log(`\n✅ Done. Artifacts in:\n   ${outDir}\n`);
-  console.log("Open:");
-  console.log("  · 00_REPORT.html           — dashboard + findings (PDF/Excel buttons inside)");
-  console.log("  · 00_Remediation_Plan.xlsx — This Week / Remediation Plan steering workbook");
-  console.log("  · 00_SUMMARY.md            — text overview");
+  const folder = path.basename(outDir);
+  console.log("\nDone.");
+  console.log(`  folder     ${outDir}`);
+  console.log("  report     00_REPORT.html");
+  console.log("  workbook   00_Remediation_Plan.xlsx");
+  console.log("  summary    00_SUMMARY.md");
   console.log("");
-  console.log(`Rebuild later:  node report.js ${path.basename(outDir)}\n`);
+  console.log(`  rebuild    node report.js ${folder}`);
+  console.log(`  resume     node collect.js --resume ${folder}\n`);
 }
 
 // Only launch when executed directly (not when required accidentally)
